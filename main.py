@@ -1,24 +1,12 @@
 from moajo_tool.utils import measure_time
 
 from abstracts import Dataset
+from utils import file, create_dataset
 from fields import TextField
 from iterator import Iterator
+from processors import BuildVocab
 from sets import Source, TextFileSource, ZipSource
 import torchtext as txt
-
-
-def file(path):
-    return TextFileSource(path)
-
-
-def zip_source(*sources):
-    return ZipSource(*sources)
-
-def create_dataset(size,*fields):
-    return Dataset(
-        fields,
-        size,
-    )
 
 
 def main():
@@ -70,18 +58,20 @@ def main():
     #
     # dd = hoge()
 
-    kftt_ja = file("../___main/DATA/kftt/kyoto_tokenized.ja").lines()
-    kftt_en = file("../___main/DATA/kftt/kyoto_tokenized.en").lines()
-    zipped = zip_source(kftt_en, kftt_ja)
+    kftt_ja = file("../___main/DATA/kftt/kyoto_tokenized.en").lines()
+    kftt_en = file("../___main/DATA/kftt/kyoto_tokenized.ja").lines()
+    # zipped = zip_source(kftt_en, kftt_ja)
 
-    src = TextField(kftt_ja, include_length=True)
-    trg = TextField(kftt_en, include_length=True)
-    ds = zipped.create(src, trg)
+    src = TextField("src", kftt_ja, vocab_processor=BuildVocab(cache_file="./tmp/hogehoge_src"), include_length=True)
+    trg = TextField("trg", kftt_en, vocab_processor=BuildVocab(cache_file="./tmp/hogehoge_trg"), include_length=True)
+    # ds = zipped.create(src, trg)
+    ds = create_dataset(len(kftt_ja), src, trg)
     ds.preprocess()
+    # ds.load_to_memory()
 
-    it = Iterator(ds, 100, sort_key=lambda a: len(a[0]))
-    for d in it:
-        print(d)
+    it = Iterator(ds, 100, sort_key=lambda a: len(a[0]), shuffle=True)
+    for i, d in enumerate(it):
+        print(i)
 
     # データ
     # src = Field(include_lengths=True)  # でーたの各項目に対してどう前処理してどうロードするかを定める。

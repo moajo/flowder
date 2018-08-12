@@ -1,5 +1,5 @@
-from abstracts import Dataset, Field
-from sets import TextFileSource, ZipSource
+from abstracts import Field
+from sets import TextFileSource, ZipSource, Dataset
 
 
 def file(path):

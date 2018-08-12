@@ -1,0 +1,10 @@
+0.880570409982175 ||| G-03A0568930 ||| 0 ||| 現在，筋ジストロフィー患者の移動介助において文書マニュアルを使用している。 ||| At present, the document manual is used in transfer assistance of the muscular dystrophy patient.
+0.879807692307692 ||| N-85A0404936 ||| 3 ||| 最後に，将来展望について記述 ||| Finally, the future perspective is described.
+0.879807692307692 ||| N-85A0404936 ||| 1 ||| 次に，インバータに共通する重要な技術について整理した。 ||| Then important technologies common to inverters are summarized.
+0.86952380952381 ||| E-00A0602580 ||| 3 ||| ＤＮＡ解析の技術を解説した。 ||| They explained the technology of the DNA analysis.
+0.86952380952381 ||| E-00A0602580 ||| 1 ||| 疾患関連遺伝子の医療への活用について説明した。 ||| They explained the utilization of the disease relation gene to the medical treatment.
+0.846825396825397 ||| S-99A0787194 ||| 2 ||| そのうち６分野，１２技術について紹介する。 ||| The 12 technologies in 6 fields are introduced.
+0.839339339339339 ||| N-03A0558200 ||| 0 ||| 液晶特性評価装置の紹介である。 ||| This is an introduction to a liquid crystal property evaluation apparatus.
+0.838617149758454 ||| G-03A0850397 ||| 2 ||| これらにより診断指針や治療方針の確立に貢献することが期待される。 ||| It is expected to contribute for the establishment of treatment plan and diagnosis guideline, by these.
+0.838617149758454 ||| G-03A0850397 ||| 0 ||| ＥＢＭ確立のために，精度の高い臨床疫学研究が求められている。 ||| For the EBM establishment, the clinical epidemiology research of which the accuracy is high has been required.
+0.832375776397515 ||| Y-99A0404245 ||| 2 ||| メタンの部分酸化反応について説明した。 ||| The partial oxidation reaction of methane is explained.

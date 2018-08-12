@@ -1,10 +1,9 @@
 import sys, os
 
-from fields import TextField
-
 sys.path.append(os.pardir)
+from fields import TextField
+from sets import Example
 from utils import zip_source, file, create_dataset
-from abstracts import Example, Field
 
 ja = file("data/kftt.ja").lines()
 en = file("data/kftt.en").lines()
@@ -35,5 +34,3 @@ for example in datsset:
     assert isinstance(value[0], int), "converted to word index(numericalize)"
     assert isinstance(example.en, list)
     assert isinstance(example.en[0], str), "disable numericalize"
-
-

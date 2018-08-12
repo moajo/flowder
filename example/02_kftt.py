@@ -1,8 +1,9 @@
 import sys, os
 
 sys.path.append(os.pardir)
+from sets import Example
 from utils import zip_source, file, create_dataset
-from abstracts import Example, Field
+from abstracts import Field
 
 ja = file("data/kftt.ja").lines()
 en = file("data/kftt.en").lines()
@@ -34,3 +35,14 @@ for example in datsset:
     j, e = example
     assert isinstance(j, str)
     assert isinstance(e, str)
+
+special_delimiter_text = file("data/special_delimiter.txt").lines().split("|||")
+for third_column in special_delimiter_text.item[3]:
+    assert isinstance(third_column, str)
+    break
+f = Field("ja", special_delimiter_text.item[3])
+dataset = special_delimiter_text.create(f)
+for japanese_column in dataset.item.ja:
+    assert isinstance(japanese_column, str)
+    assert "現在" in japanese_column
+    break
