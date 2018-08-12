@@ -106,7 +106,8 @@ class TextField(Field):
 
         super(TextField, self).__init__(
             target_set,
-            preprocess=[tokenize, lowercase],
+            # preprocess=[tokenize, lowercase],
+            preprocess=[tokenize],
             process=[vocab],
             loading_process=loading_process,
         )

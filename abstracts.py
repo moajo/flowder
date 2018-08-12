@@ -1,10 +1,63 @@
 from collections import OrderedDict
+from typing import Iterable
 
 from moajo_tool.utils import measure_time
 
-from processors import RawProcessor
+from processors import RawProcessor, BuildVocab
 from queue import Queue
 from tqdm import tqdm
+
+
+class SourceBase:
+    """
+    データソース
+    親があるならそれのみに依存。
+    なければ何らかの外部データに依存する。
+    （親があるけど、親以外のデータにも依存することは禁止）
+    マージするときなど親は複数になる
+    """
+
+    def __init__(self, *parents):
+        assert type(parents) is tuple
+        self.parents: [SourceBase] = parents or []
+        self.children = []
+        self._size = None
+
+    def __len__(self):
+        if self._size is None:
+            self._size = self.calculate_size()
+        return self._size
+
+    def calculate_size(self):
+        """
+        データサイズを計算。createまでに呼ばれる
+        :return:
+        """
+        raise NotImplementedError()
+
+    def calculate_value(self, *args):
+        """
+        親セットの値から値（のイテレータ）を計算するステートレスな関数
+        独立ソースの場合、呼ばれない。
+        :param args:
+        :return:
+        """
+        raise NotImplementedError()
+
+    def __getitem__(self, item):
+        """
+        ランダムアクセスに対応する必要あり
+        :param item:
+        :return:
+        """
+        raise NotImplementedError()
+
+    def __iter__(self):
+        """
+        iterableである必要あり
+        :return:
+        """
+        raise NotImplementedError()
 
 
 def cache_last_value():
@@ -38,16 +91,8 @@ def cache_value():
 
 
 def create_cache_iter_tree(fields):
-    """
-
-    :param fields:
-    :return: leafs
-    """
     cached_iters = {}
     leafs = []
-    # queue = Queue()
-    # for f in fields:
-    #     queue.put_nowait(f.target_set)
     for f in fields:
         ts = f.target_set
         ts_id = id(ts)
@@ -77,40 +122,26 @@ def create_cache_iter_tree(fields):
 
 class Example:
     def __init__(self, data_dict):
-        nameless_count = 1
-        self._values = []
         self._keys = []
         for name, v in data_dict.items():
-            if name is None:
-                name = f"attr{nameless_count}"
-                nameless_count += 1
             setattr(self, name, v)
             self._keys.append(name)
-            self._values.append(v)
-
-    def __getitem__(self, item):
-        return self._values[item]
 
 
-def example_from_names(names, vs):
-    nameless_count = 1
+def create_example(field_names, vs, return_as_tuple=True):
+    """
 
-    dd = []
-    for name, v in zip(names, vs):
-        if name is None:
-            name = f"attr{nameless_count}"
-            nameless_count += 1
-        dd.append((name, v))
-    return Example(OrderedDict(dd))
-
-
-def create_example(field_names, vs, return_raw_value_for_single_data=True, return_tuple_for_nameless_data=True):
+    :param field_names: 属性名のリスト
+    :param vs: 値のリスト
+    :param return_as_tuple: Exampleにせずtupleのまま返すかどうか
+    :return:
+    """
     assert len(field_names) == len(vs)
-    if return_raw_value_for_single_data and len(vs) == 1:
-        return vs[0]
-    if return_tuple_for_nameless_data and all(name is None for name in field_names):
+    if return_as_tuple:
+        if len(vs) == 1:
+            return vs[0]
         return tuple(vs)
-    return example_from_names(field_names, vs)
+    return Example(OrderedDict(zip(field_names, vs)))
 
 
 class CachedIterator:
@@ -186,7 +217,7 @@ class CachedIterator:
         self.value = None
 
 
-class Dataset:
+class Dataset(SourceBase):
     """
     fieldsとsetをつなぐ。torchのDatasetを継承。
     機能は
@@ -195,15 +226,24 @@ class Dataset:
     - random access
     """
 
-    def __init__(self, fields: list, size: int,
-                 return_raw_value_for_single_data=True,
-                 return_tuple_for_nameless_data=True):
-        self.fields = fields
+    def __init__(self, fields: Iterable, size: int, return_as_tuple=True):
+        """
+        note: fieldsの各要素はnameが未設定の場合、このタイミングで自動的に設定されます
+        :param fields:
+        :param size:
+        :param return_as_tuple:
+        """
+        super(Dataset, self).__init__()
+        self.fields = list(fields)
         self.size = size
-        self._example_kwargs = {
-            "return_raw_value_for_single_data": return_raw_value_for_single_data,
-            "return_tuple_for_nameless_data": return_tuple_for_nameless_data,
-        }
+        self._return_as_tuple = return_as_tuple
+
+        # auto setting name to fields if not set.
+        nameless_count = 1
+        for f in self.fields:
+            if f.name is None:
+                f.name = f"attr{nameless_count}"
+                nameless_count += 1
 
     @measure_time()
     def preprocess(self):
@@ -227,13 +267,16 @@ class Dataset:
                 f.calculate_value(leaf.next(i))  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
                 for f, leaf in zip(self.fields, leaf_iterators)
             ]
-            yield create_example([f.name for f in self.fields], vs, **self._example_kwargs)
+            yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ
         vs = [f[item] for f in self.fields]
-        return create_example([f.name for f in self.fields], vs, **self._example_kwargs)
+        return create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def __len__(self):
+        return self.size
+
+    def calculate_size(self):
         return self.size
 
 

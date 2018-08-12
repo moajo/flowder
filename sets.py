@@ -1,28 +1,16 @@
 import pathlib
 import linecache
 
-from abstracts import Dataset, Field
+from abstracts import Dataset, Field, SourceBase
 
 
-class Source:
-    """
-    データソース
-    親があるならそれのみに依存。
-    なければ何らかの外部データに依存する。
-    （親があるけど、親以外のデータにも依存することは禁止）
-    マージするときなど親は複数になる
-    """
+class Source(SourceBase):
 
-    def __init__(self, source_type, *parents):
-        assert type(parents) is tuple
-        self.parents: [Source] = parents or []
-        self.source_type = source_type
-        self.children = []
-        self.size = None
+    def to_memory(self):
+        return MemorySource(self)
 
     def create(self, *fields,
-               return_raw_value_for_single_data=True,
-               return_tuple_for_nameless_data=True
+               return_as_tuple=False,
                ):
         """
         反復可能データセットを構築
@@ -36,8 +24,7 @@ class Source:
         return Dataset(
             fields=fields,
             size=size,
-            return_raw_value_for_single_data=return_raw_value_for_single_data,
-            return_tuple_for_nameless_data=return_tuple_for_nameless_data,
+            return_as_tuple=return_as_tuple
         )
 
     def __len__(self):
@@ -45,42 +32,11 @@ class Source:
             self.size = self.calculate_size()
         return self.size
 
-    def calculate_size(self):
-        """
-        データサイズを計算。createまでに呼ばれる
-        :return:
-        """
-        raise NotImplementedError()
-
-    def calculate_value(self, *args):
-        """
-        親セットの値から値（のイテレータ）を計算するステートレスな関数
-        独立ソースの場合、呼ばれない。
-        :param args:
-        :return:
-        """
-        raise NotImplementedError()
-
-    def __getitem__(self, item):
-        """
-        ランダムアクセスに対応する必要あり
-        :param item:
-        :return:
-        """
-        raise NotImplementedError()
-
-    def __iter__(self):
-        """
-        iterableである必要あり
-        :return:
-        """
-        raise NotImplementedError()
-
 
 class MapSource(Source):
 
     def __init__(self, transform, parent: Source):
-        super(MapSource, self).__init__("map", parent)
+        super(MapSource, self).__init__(parent)
         self.transform = transform
 
     def calculate_size(self):
@@ -106,7 +62,7 @@ class ZipSource(Source):
 
     def __init__(self, *parents):
         assert len(parents) != 0
-        super(ZipSource, self).__init__("zip", *parents)
+        super(ZipSource, self).__init__(*parents)
 
     def calculate_size(self):
         sizes = [p.calculate_size() for p in self.parents]
@@ -126,6 +82,29 @@ class ZipSource(Source):
             yield d
 
 
+class MemorySource(Source):
+    def __init__(self, parent, load_immediately=True):
+        super(MemorySource, self).__init__(parent)
+        self.data = None
+        if load_immediately:
+            self.load()
+
+    def load(self):
+        if self.data is None:
+            self.data = list(self.parents[0])
+            self.parents = []
+        return self.data
+
+    def calculate_size(self):
+        return len(self.load())
+
+    def __getitem__(self, item):
+        return self.load()[item]
+
+    def __iter__(self):
+        return iter(self.load())
+
+
 class StrSource(Source):
     """
     特定ファイルの各行を返すソース
@@ -133,7 +112,7 @@ class StrSource(Source):
 
     def __init__(self, parent):
         assert type(parent) is TextFileSource
-        super(StrSource, self).__init__("str", parent)
+        super(StrSource, self).__init__(parent)
         self.parent = parent
 
     def split(self, delimiter=" "):
@@ -143,24 +122,13 @@ class StrSource(Source):
         for f in self.parent:
             return sum(1 for _ in f)
 
-    # def __getitem__(self, item):
-    #     with self.parent_fileset.path.open() as f:
-    #         for _ in range(item):
-    #             f.readline()
-    #         return f.readline()[:-1]  # remove tailing \n
-
     def calculate_value(self, file_source):
         for line in file_source:
             yield line[:-1]  # remove tailing \n
 
     def __getitem__(self, item):
         assert type(item) is int
-        line = linecache.getline(str(self.parent.path), item + 1)
-        return line
-        # for f in self.parent:
-        #     # line = linecache.getline('sample.txt', int(a))
-        #     for line in self.calculate_value(f):
-        #         yield line
+        return linecache.getline(str(self.parent.path), item + 1)
 
     def __iter__(self):
         for f in self.parent:
@@ -170,7 +138,7 @@ class StrSource(Source):
 
 class TextFileSource(Source):
     def __init__(self, path):
-        super(TextFileSource, self).__init__("text_file")
+        super(TextFileSource, self).__init__()
         self.path = pathlib.Path(path)
 
     def lines(self):

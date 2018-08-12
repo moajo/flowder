@@ -185,9 +185,10 @@ class Iterator:
     """
 
     def __init__(self, dataset, batch_size, sort_key=None, device=None,
-                 batch_size_fn=None, train=True,
+                 batch_size_fn=None,
                  repeat=None, shuffle=None, sort=None,
-                 sort_within_batch=None):
+                 sort_within_batch=None,
+                 batch_transforms=None):
         """
         datasetはランダムアクセスできれば何でもいい。
         その値はExampleかtupleかdict
@@ -206,20 +207,17 @@ class Iterator:
         :param sort:
         :param sort_within_batch:
         """
-        self.batch_size, self.train, self.dataset = batch_size, train, dataset
+        self.batch_size, self.dataset = batch_size, dataset
         self.batch_size_fn = batch_size_fn
         self.iterations = 0
-        self.repeat = train if repeat is None else repeat
-        self.shuffle = train if shuffle is None else shuffle
-        self.sort = not train if sort is None else sort
+        self.repeat = repeat
+        self.shuffle = shuffle
+        self.sort = sort
         if sort_within_batch is None:
             self.sort_within_batch = self.sort
         else:
             self.sort_within_batch = sort_within_batch
-        if sort_key is None:
-            self.sort_key = dataset.sort_key
-        else:
-            self.sort_key = sort_key
+        self.sort_key = sort_key
         self.device = device
         if not torch.cuda.is_available() and self.device is None:
             self.device = -1

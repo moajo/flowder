@@ -55,8 +55,7 @@ class BuildVocab(Processor):
         self._kwargs = kwargs
 
     def __call__(self, tokenized_sentence):
-        for word in tokenized_sentence:
-            self.word_counter.update(word)
+        self.word_counter.update(tokenized_sentence)
 
     def start_preprocess_data_feed(self, field):
         pass
@@ -65,17 +64,6 @@ class BuildVocab(Processor):
         self.build_vocab()
 
     def build_vocab(self):
-        """Construct the Vocab object for this field from one or more datasets.
-
-        Arguments:
-            Positional arguments: Dataset objects or other iterable data
-                sources from which to construct the Vocab object that
-                represents the set of possible values for this field. If
-                a Dataset object is provided, all columns corresponding
-                to this field are used; individual columns can also be
-                provided directly.
-            Remaining keyword arguments: Passed to the constructor of Vocab.
-        """
         specials = list(OrderedDict.fromkeys([
             tok for tok in [
                 self.unk_token,

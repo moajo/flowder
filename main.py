@@ -1,3 +1,6 @@
+from moajo_tool.utils import measure_time
+
+from abstracts import Dataset
 from fields import TextField
 from iterator import Iterator
 from sets import Source, TextFileSource, ZipSource
@@ -10,6 +13,12 @@ def file(path):
 
 def zip_source(*sources):
     return ZipSource(*sources)
+
+def create_dataset(size,*fields):
+    return Dataset(
+        fields,
+        size,
+    )
 
 
 def main():
@@ -48,12 +57,25 @@ def main():
 
     # for batch in test_iter:
     #     print(batch)
+
+    # @measure_time()
+    # def hoge():
+    #     src = txt.data.Field(include_lengths=True)
+    #     trg = txt.data.Field(include_lengths=True)
+    #     ds = txt.datasets.TranslationDataset(path="../___main/DATA/kftt/kyoto_tokenized.", exts=("en", "ja"),
+    #                                          fields=[('src', src), ('trg', trg)])
+    #     src.build_vocab(ds)
+    #     trg.build_vocab(ds)
+    #     return src,trg,ds
+    #
+    # dd = hoge()
+
     kftt_ja = file("../___main/DATA/kftt/kyoto_tokenized.ja").lines()
     kftt_en = file("../___main/DATA/kftt/kyoto_tokenized.en").lines()
     zipped = zip_source(kftt_en, kftt_ja)
 
-    src = TextField(kftt_ja)
-    trg = TextField(kftt_en)
+    src = TextField(kftt_ja, include_length=True)
+    trg = TextField(kftt_en, include_length=True)
     ds = zipped.create(src, trg)
     ds.preprocess()
 
