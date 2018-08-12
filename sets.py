@@ -20,18 +20,30 @@ class Source:
         self.children = []
         self.size = None
 
-    def create(self, *fields):
+    def create(self, *fields,
+               return_raw_value_for_single_data=True,
+               return_tuple_for_nameless_data=True
+               ):
         """
         反復可能データセットを構築
         :return:
         """
-        if self.size is None:
-            self.size = self.calculate_size()
-        assert self.size is not None
+        size = len(self)
+        assert size is not None
 
         if len(fields) == 0:
             fields = [Field(self)]
-        return Dataset(fields=fields, size=self.size)
+        return Dataset(
+            fields=fields,
+            size=size,
+            return_raw_value_for_single_data=return_raw_value_for_single_data,
+            return_tuple_for_nameless_data=return_tuple_for_nameless_data,
+        )
+
+    def __len__(self):
+        if self.size is None:
+            self.size = self.calculate_size()
+        return self.size
 
     def calculate_size(self):
         """
@@ -87,6 +99,33 @@ class MapSource(Source):
             yield self.transform(d)
 
 
+class ZipSource(Source):
+    """
+    ソースのサイズはすべて等しい必要がある。
+    """
+
+    def __init__(self, *parents):
+        assert len(parents) != 0
+        super(ZipSource, self).__init__("zip", *parents)
+
+    def calculate_size(self):
+        sizes = [p.calculate_size() for p in self.parents]
+        assert all(sizes[0] == s for s in sizes)
+        return sizes[0]
+
+    def calculate_value(self, arg):
+        return arg
+
+    def __getitem__(self, item):
+        return self.calculate_value(
+            *[p[item] for p in self.parents]
+        )
+
+    def __iter__(self):
+        for d in zip(*self.parents):
+            yield d
+
+
 class StrSource(Source):
     """
     特定ファイルの各行を返すソース
@@ -115,10 +154,13 @@ class StrSource(Source):
             yield line[:-1]  # remove tailing \n
 
     def __getitem__(self, item):
-        for f in self.parent:
-            # line = linecache.getline('sample.txt', int(a))
-            for line in self.calculate_value(f):
-                yield line
+        assert type(item) is int
+        line = linecache.getline(str(self.parent.path), item + 1)
+        return line
+        # for f in self.parent:
+        #     # line = linecache.getline('sample.txt', int(a))
+        #     for line in self.calculate_value(f):
+        #         yield line
 
     def __iter__(self):
         for f in self.parent:

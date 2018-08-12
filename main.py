@@ -1,23 +1,65 @@
-from sets import Source, TextFileSource
+from fields import TextField
+from iterator import Iterator
+from sets import Source, TextFileSource, ZipSource
+import torchtext as txt
 
 
 def file(path):
     return TextFileSource(path)
 
 
+def zip_source(*sources):
+    return ZipSource(*sources)
+
+
 def main():
     gitignore = file("example/data/kftt.ja")
-    # hoge = gitignore.create()
+    hoge = gitignore.create()
     # for k in hoge:
     #     print(k)
     ls = gitignore.lines()
     # ds = ls.create()
     # for l in ds:
     #     print(l)
-    spl = ls.split()
-    for l in spl:
-        print(l)
+    #
+    # #splitによるMapのテスト
+    # spl = ls.split()
+    # for l in spl:
+    #     print(l)
+    #
+    # f = TextField(ls)
+    # ds = ls.create(f)
+    # ds.preprocess()
+    # for l in ds:
+    #     print(l)
 
+    # f = TextField(ls)
+    # f.name="hogehoge"
+    # ds = ls.create(f,return_raw_value_for_single_data=False)
+    # ds.preprocess()
+    # for l in ds:
+    #     print(l)
+    #
+    # test_iter = Iterator(ds, 2, shuffle=False, repeat=False,
+    #                               sort_key=lambda a: len(a[0]),
+    #                               sort_within_batch=True,
+    #                               device=-1,
+    #                               )
+
+    # for batch in test_iter:
+    #     print(batch)
+    kftt_ja = file("../___main/DATA/kftt/kyoto_tokenized.ja").lines()
+    kftt_en = file("../___main/DATA/kftt/kyoto_tokenized.en").lines()
+    zipped = zip_source(kftt_en, kftt_ja)
+
+    src = TextField(kftt_ja)
+    trg = TextField(kftt_en)
+    ds = zipped.create(src, trg)
+    ds.preprocess()
+
+    it = Iterator(ds, 100, sort_key=lambda a: len(a[0]))
+    for d in it:
+        print(d)
 
     # データ
     # src = Field(include_lengths=True)  # でーたの各項目に対してどう前処理してどうロードするかを定める。
