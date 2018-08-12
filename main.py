@@ -1,0 +1,80 @@
+from sets import Source, TextFileSource
+
+
+def file(path):
+    return TextFileSource(path)
+
+
+def main():
+    gitignore = file("example/data/kftt.ja")
+    # hoge = gitignore.create()
+    # for k in hoge:
+    #     print(k)
+    ls = gitignore.lines()
+    # ds = ls.create()
+    # for l in ds:
+    #     print(l)
+    spl = ls.split()
+    for l in spl:
+        print(l)
+
+
+    # データ
+    # src = Field(include_lengths=True)  # でーたの各項目に対してどう前処理してどうロードするかを定める。
+    # trg = Field(include_lengths=True, eos_token="<eos>", init_token="<sos>")
+    # data = file("file").lines().split("\t")  # 指定ファイル
+    #
+    # # 型
+    # f = file("tokenized.en")  # ファイル
+    # f.lines()  # 各行 lineSet型
+    #
+    # # 具体例 kftt 別ファイル
+    # kftt = file("tokenized.en").lines() | file("tokenized.ja").lines()  # linesetはzip演算子|でtuplesetになる
+    # for en, ja in kftt:
+    #     pass  # 各行のタプルイテレーション
+    # src = Field(include_lengths=True, use_vocab=True)
+    # src = Field(preprocess=tokenize(), process=normalize() | build_vocab(max_size=1000), postprocess=indexing())
+    # trg = Field(include_lengths=True, use_vocab=True)
+    # kftt.item[0] >> src
+    # kftt.item[1] >> trg
+    # ds = kftt.create_dataset()  # 非同期iterable lengthと__iter__がある
+    #
+    # # 具体例 aspec　特殊記号区切り
+    # kftt = file("train-1.txt").lines().split("|||")  # tupleset
+    # src = Field(include_lengths=True, use_vocab=True, tokenizer="mecab_hoghoge")  # トーク内座指定。デフォルトはspace split?
+    # trg = Field(include_lengths=True, use_vocab=True)
+    # kftt.item[3] >> src
+    # kftt.item[4] >> trg
+    # ds = kftt.create_dataset()  # 非同期iterable lengthと__iter__がある
+    #
+    # # 具体例 openSUB　複雑怪奇
+    # linkGrps = xml("en-fr.xml").children("linkGrp")  # linkGrpのセット(xmlとして読んで特定の名前の小要素のセットにする。)
+    # fromDocs, toDocs = linkGrps.sub("fromDoc", "toDoc")  # linkGrpをmapして分岐
+    # m = fromDocs.only_exist_file().open("gzip").xml() | toDocs.only_exist_file().open("gzip").xml()
+    # fromDocs = m.item(0)
+    # toDocs = m.item(1)
+    #
+    # links = linkGrps.children("link")  # 「linkのセット」のセットになる
+    # xtargets = links.get("xtargets").split(";").filter(lambda t, f: t != "" and f != "")  # [strのtupleのセット]のセット
+    # fs = xtargets.item(0).split(" ")
+    # ts = xtargets.item(1).split(" ")
+    # # TODO 未完・・・
+    #
+    # # 具体例 celebA　画像ファイルとtsvアノテーション
+    # anno = tsv("list_attr_celeba.txt")
+    # img_files = anno.item(0)  # strのセット
+    # # a = map_zip(
+    # #     directory("img_align_celeba").files(),
+    # #     img_files,
+    # # )
+    # imgs = img_files.map(lambda a: "img_align_celeba/" + a).open_img()  # imgのセット
+    # f = Field(process=mean(), postprocess=whitening())
+    # imgs >> f
+    # ds = imgs.create_datsset()
+    #
+    # # 具体例 タイタニック　csv
+    # ds = csv("train.csv").create()
+
+
+if __name__ == '__main__':
+    main()
