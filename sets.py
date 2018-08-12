@@ -1,5 +1,8 @@
+import hashlib
 import pathlib
 import linecache
+import pickle
+import sys
 
 from abstracts import Dataset, Field, SourceBase
 
@@ -7,7 +10,7 @@ from abstracts import Dataset, Field, SourceBase
 class Source(SourceBase):
 
     def to_memory(self):
-        return MemorySource(self)
+        return MemoryCacheSource(self)
 
     def create(self, *fields,
                return_as_tuple=False,
@@ -26,11 +29,6 @@ class Source(SourceBase):
             size=size,
             return_as_tuple=return_as_tuple
         )
-
-    def __len__(self):
-        if self.size is None:
-            self.size = self.calculate_size()
-        return self.size
 
 
 class MapSource(Source):
@@ -82,9 +80,9 @@ class ZipSource(Source):
             yield d
 
 
-class MemorySource(Source):
+class MemoryCacheSource(Source):
     def __init__(self, parent, load_immediately=True):
-        super(MemorySource, self).__init__(parent)
+        super(MemoryCacheSource, self).__init__(parent)
         self.data = None
         if load_immediately:
             self.load()
@@ -103,6 +101,88 @@ class MemorySource(Source):
 
     def __iter__(self):
         return iter(self.load())
+
+
+def _calc_args_hash(args):
+    hs = 0
+    for obj in args:
+        if type(obj) == str:
+            obj_hash = int(hashlib.md5(obj.encode('utf-8')).hexdigest(), 16)
+            hs = (hs * 31 + obj_hash) % sys.maxsize
+        elif type(obj) == int:
+            hs = (hs * 31 + obj) % sys.maxsize
+        else:
+            raise ValueError(
+                f"{obj} is not hashable.\nall arguments are needed to be hashable for caching."
+            )
+    return hs
+
+
+class FileCacheSource(MemoryCacheSource):
+    """
+    dataをファイルにキャッシュする
+    キャッシュファイル名はcache_group_nameとcache_argsから計算される
+
+    """
+
+    def __init__(self, parent, cache_group_name, *cache_args, cache_immediately=True, cache_dir=".tmp"):
+        """
+        キャッシュファイル名は
+        `cache_group_name`_`HASH`
+        となる。
+
+        :param parent:
+        :param cache_group_name: キャッシュファイルの固定プレフィックス
+        :param cache_args: キャッシュファイル名にこれらのハッシュ値が使われる
+        :param cache_immediately: 即座にデータをロード、キャッシュファイルを作成する
+        :param cache_dir: キャッシュファイルが作られるディレクトリ
+        """
+        super(FileCacheSource, self).__init__(parent)
+        self.data = None
+        self.cache_group_name = cache_group_name
+        self.cache_dir = pathlib.Path(cache_dir)
+        hs = _calc_args_hash(cache_args)
+        self.cache_file_path = self.cache_dir / (self.cache_group_name + "_" + str(hs))
+
+        if cache_immediately:
+            self.load()
+
+    def clear_cache(self, remove_all=False):
+        """
+        キャッシュを削除する
+        キャッシュファイル名が完全一致するファイルを削除する
+        :param remove_all: 同一のcache_group_nameのすべてのキャッシュも削除する
+        :return:
+        """
+        if remove_all:
+            for p in self.cache_dir.glob(f"{self.cache_group_name}_*"):
+                p.unlink()
+        else:
+            if self.cache_file_path.exists():
+                self.cache_file_path.unlink()
+
+    def _make_cache(self):
+        if self.cache_file_path.exists():
+            return
+        if self.data is None:
+            self.load(cache_if_not_yet=False)
+        with self.cache_file_path.open("wb") as f:
+            pickle.dump(self.data, f)
+        return self.data
+
+    def load(self, cache_if_not_yet=True):
+        if self.cache_file_path.exists():
+            with self.cache_file_path.open("rb") as f:
+                self.data = pickle.load(f)
+                self.parents = []
+                return self.data
+        else:
+            if self.data is None:
+                self.data = list(self.parents[0])
+                self.parents = []
+            if cache_if_not_yet:
+                self._make_cache()
+            return self.data
 
 
 class StrSource(Source):
