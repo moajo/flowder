@@ -95,7 +95,7 @@ class TextField(Field):
             tokenize=lambda s: s.split(),
             lower=False,
             vocab_processor=BuildVocab(),
-            include_length=True,
+            include_length=False,
             numericalize=True,
     ):
         preprocess = []
