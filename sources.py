@@ -3,6 +3,8 @@ import linecache
 import pathlib
 import pickle
 import sys
+import csv
+from io import StringIO
 from collections import OrderedDict
 from queue import Queue
 from typing import Iterable
@@ -27,7 +29,11 @@ def cache_value():
     return decorator
 
 
-class MapDummy:
+class MapDummy:  # TODO equalsを実装してfilterに
+    """
+    to make map source easily
+    """
+
     def __init__(self, source):
         self.source = source
 
@@ -43,11 +49,10 @@ class Source(SourceBase):
     def to_memory(self):
         return MemoryCacheSource(self)
 
-    def create(self, *fields,
-               return_as_tuple=False,
-               ):
+    def create(self, *fields, return_as_tuple=False):
         """
-        反復可能データセットを構築
+        create Dataset
+        if fields is not given, use "raw" fields as default.
         :return:
         """
         size = len(self)
@@ -63,10 +68,22 @@ class Source(SourceBase):
 
     @property
     def item(self):
+        """
+        short-hand for Map
+        ex)
+        mapped = source.item[0]
+        # mapped = MapSource(lambda x:x[0], source)
+        mapped = source.item.hoge
+        # mapped = MapSource(lambda x:x.hoge, source)
+        :return:
+        """
         return MapDummy(self)
 
 
 class MapSource(Source):
+    """
+    this Source iterate value mapped by transform from parent source
+    """
 
     def __init__(self, transform, parent: Source):
         super(MapSource, self).__init__(parent)
@@ -90,7 +107,8 @@ class MapSource(Source):
 
 class ZipSource(Source):
     """
-    ソースのサイズはすべて等しい必要がある。
+    zip to tuple
+    all parents must has same size
     """
 
     def __init__(self, *parents):
@@ -250,16 +268,19 @@ class StrSource(Source):
 
 
 class TextFileSource(Source):
+    """
+    iterate a single value which opened file
+    """
+
     def __init__(self, path):
         super(TextFileSource, self).__init__()
         self.path = pathlib.Path(path)
 
     def lines(self):
-        """
-        str セットを返す
-        :return:
-        """
         return StrSource(self)
+
+    def csv(self):
+        return CSVSource(self)
 
     def calculate_size(self):
         return 1
@@ -272,6 +293,32 @@ class TextFileSource(Source):
     def __iter__(self):
         with self.path.open(encoding="utf-8") as f:
             yield f
+
+
+class CSVSource(Source):
+    def __init__(self, parent):
+        assert type(parent) is TextFileSource
+        super(CSVSource, self).__init__(parent)
+
+    def calculate_size(self):
+        for f in self.parents[0]:
+            return sum(1 for _ in f)
+
+    def calculate_value(self, file_source):
+        reader = csv.reader(file_source)
+        for line in reader:
+            yield line
+
+    def __getitem__(self, item):
+        assert type(item) is int
+        line = linecache.getline(str(self.parents[0].path), item + 1)
+        reader = csv.reader(StringIO(line))
+        return next(iter(reader))
+
+    def __iter__(self):
+        for f in self.parents[0]:
+            for line in self.calculate_value(f):
+                yield line
 
 
 class CachedIterator:
