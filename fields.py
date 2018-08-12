@@ -92,22 +92,31 @@ class TextField(Field):
             self,
             target_set,
             tokenize=lambda s: s.split(),
+            lower=False,
+            vocab_processor=BuildVocab(),
             include_length=True,
             numericalize=True,
     ):
-        vocab = BuildVocab()
+        preprocess = []
+        if tokenize:
+            preprocess.append(tokenize)
+        if lower:
+            preprocess.append(lowercase)
+
+        process = []
+        if vocab_processor:
+            process.append(vocab_processor)
+
         loading_process = []
-
         if numericalize:
-            loading_process.append(_numericalize(vocab))
-
+            assert vocab_processor
+            loading_process.append(_numericalize(vocab_processor))
         if include_length:
             loading_process.append(_include_length)
 
         super(TextField, self).__init__(
             target_set,
-            # preprocess=[tokenize, lowercase],
-            preprocess=[tokenize],
-            process=[vocab],
+            preprocess=preprocess,
+            process=process,
             loading_process=loading_process,
         )

@@ -257,13 +257,20 @@ class Dataset(SourceBase):
         全fieldsのプリプロセスを実行
         :return:
         """
-        leaf_iterators = create_cache_iter_tree(self.fields)
-        for f in tqdm(self.fields, desc="preprocess initializing"):
-            f.start_preprocess_data_feed()
-        for i in tqdm(range(self.size), desc="preprocessing"):
-            for f, leaf in zip(self.fields, leaf_iterators):
+
+        fields = [
+            f for f in
+            tqdm(self.fields, desc="preprocess initializing")
+            if f.start_preprocess_data_feed() is not False
+        ]
+        if len(fields) == 0:
+            print("preprocess is not needed for any fields")
+            return
+        leaf_iterators = create_cache_iter_tree(fields)
+        for i in tqdm(range(self.size), desc=f"preprocessing {len(fields)} fields"):
+            for f, leaf in zip(fields, leaf_iterators):
                 f.processing_data_feed(leaf.next(i))
-        for f in tqdm(self.fields, desc="preprocess closing"):
+        for f in tqdm(fields, desc="preprocess closing"):
             f.finish_preprocess_data_feed()
 
     def __iter__(self):
@@ -296,6 +303,14 @@ class Field:
     """
 
     def __init__(self, target_set, preprocess=None, process=None, loading_process=None, batch_process=None):
+        """
+
+        :param target_set:
+        :param preprocess: 共通前処理。map。関数のリスト
+        :param process: preprocessに続く前処理。Processorのリスト
+        :param loading_process: 後処理。map。関数のリスト
+        :param batch_process:
+        """
         self.name = None
         self.target_set = target_set
 
@@ -308,9 +323,12 @@ class Field:
         v = self.target_set[item]
         return self.calculate_value(v)
 
-    def start_preprocess_data_feed(self):  # TODO withで書き直し？
+    def start_preprocess_data_feed(self):
+        need_data_feed = False
         for p in self.process:
-            p.start_preprocess_data_feed(self)
+            if p.start_preprocess_data_feed(self) is not False:
+                need_data_feed = True
+        return need_data_feed
 
     def finish_preprocess_data_feed(self):
         for p in self.process:
@@ -321,7 +339,7 @@ class Field:
         for pre in self.preprocess:
             v = pre(v)
         for ld in self.process:
-            v = ld(v)
+            ld(v)
 
     def calculate_value(self, raw_value):
 
