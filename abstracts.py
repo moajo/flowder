@@ -244,6 +244,12 @@ class Dataset(SourceBase):
             if f.name is None:
                 f.name = f"attr{nameless_count}"
                 nameless_count += 1
+        self._memory_cache = None
+
+    def load_to_memory(self):
+        if self._memory_cache is not None:
+            return
+        self._memory_cache = list(self)
 
     @measure_time()
     def preprocess(self):
@@ -261,6 +267,8 @@ class Dataset(SourceBase):
             f.finish_preprocess_data_feed()
 
     def __iter__(self):
+        if self._memory_cache is not None:
+            return iter(self._memory_cache)
         leaf_iterators = create_cache_iter_tree(self.fields)
         for i in range(self.size):
             vs = [
@@ -270,6 +278,8 @@ class Dataset(SourceBase):
             yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ
+        if self._memory_cache is not None:
+            return self._memory_cache[item]
         vs = [f[item] for f in self.fields]
         return create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
