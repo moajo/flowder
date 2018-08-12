@@ -2,7 +2,7 @@ import sys, os
 
 sys.path.append(os.pardir)
 from utils import file
-from sets import Example
+from sources import Example
 
 files = file("data/kftt.ja")
 assert len(files) == 1, "contains just a file"

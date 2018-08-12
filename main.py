@@ -5,7 +5,7 @@ from utils import file, create_dataset
 from fields import TextField
 from iterator import Iterator
 from processors import BuildVocab
-from sets import Source, TextFileSource, ZipSource
+from sources import Source, TextFileSource, ZipSource
 import torchtext as txt
 
 

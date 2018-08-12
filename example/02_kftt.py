@@ -1,7 +1,7 @@
 import sys, os
 
 sys.path.append(os.pardir)
-from sets import Example
+from sources import Example
 from utils import zip_source, file, create_dataset
 from abstracts import Field
 

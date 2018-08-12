@@ -5,7 +5,7 @@ from copy import deepcopy
 import torch
 import math
 
-from abstracts import Example
+from sources import Example
 
 
 def convert_data_to_example(data):
