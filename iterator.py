@@ -152,42 +152,13 @@ class Iterator:
     """
     データセットを学習イテレーションに供給するイテレータ
     バッチ変換、パディング、シャッフル、テンソルへの変換などを行う
-
-
-
-    Defines an iterator that loads batches of data from a Dataset.
-
-    Attributes:
-        dataset: The Dataset object to load Examples from.
-        batch_size: Batch size.
-        batch_size_fn: Function of three arguments (new example to add, current
-            count of examples in the batch, and current effective batch size)
-            that returns the new effective batch size resulting from adding
-            that example to a batch. This is useful for dynamic batching, where
-            this function would add to the current effective batch size the
-            number of tokens in the new example.
-        sort_key: A key to use for sorting examples in order to batch together
-            examples with similar lengths and minimize padding. The sort_key
-            provided to the Iterator constructor overrides the sort_key
-            attribute of the Dataset, or defers to it if None.
-        train: Whether the iterator represents a train set.
-        repeat: Whether to repeat the iterator for multiple epochs.
-        shuffle: Whether to shuffle examples between epochs.
-        sort: Whether to sort examples according to self.sort_key.
-            Note that repeat, shuffle, and sort default to train, train, and
-            (not train).
-        sort_within_batch: Whether to sort (in descending order according to
-            self.sort_key) within each batch. If None, defaults to self.sort.
-            If self.sort is True and this is False, the batch is left in the
-            original (ascending) sorted order.
-        device: Device to create batches on. Use -1 for CPU and None for the
-            currently active GPU device.
     """
 
     def __init__(self, dataset, batch_size, sort_key=None, device=None,
                  batch_size_fn=None,
                  repeat=None, shuffle=None, sort=None,
                  sort_within_batch=None,
+                 batch_constructor=Batch,
                  batch_transforms=None):
         """
         datasetはランダムアクセスできれば何でもいい。
@@ -207,12 +178,14 @@ class Iterator:
         :param sort:
         :param sort_within_batch:
         """
+        self.batch_constructor = batch_constructor
         self.batch_size, self.dataset = batch_size, dataset
         self.batch_size_fn = batch_size_fn
         self.iterations = 0
         self.repeat = repeat
         self.shuffle = shuffle
         self.sort = sort
+        self.batch_transforms = batch_transforms or []
         if sort_within_batch is None:
             self.sort_within_batch = self.sort
         else:
@@ -228,16 +201,23 @@ class Iterator:
         self._iterations_this_epoch = 0
         self._random_state_this_epoch = None
         self._restored_from_state = False
+        self.batches_generator = None
 
-    def data(self):
-        """Return the examples in the dataset in order, sorted, or shuffled."""
+    def batch_transform(self, mini_batch):
+        for t in self.batch_transforms:
+            mini_batch = t(mini_batch)
+        return mini_batch
+
+    def get_data_order(self):
         if self.sort:
-            xs = sorted(self.dataset, key=self.sort_key)
+            return [
+                i for i, v in
+                sorted(enumerate(self.dataset), key=lambda i, v: self.sort_key(v))
+            ]
         elif self.shuffle:
-            xs = [self.dataset[i] for i in self.random_shuffler(range(len(self.dataset)))]
+            return [i for i in self.random_shuffler(range(len(self.dataset)))]
         else:
-            xs = self.dataset
-        return xs
+            return list(range(len(self.dataset)))
 
     def init_epoch(self):
         """Set up the batch generator for a new epoch."""
@@ -247,7 +227,7 @@ class Iterator:
         else:
             self._random_state_this_epoch = self.random_shuffler.random_state
 
-        self.create_batches()
+        self.batches_generator = self.create_batches()
 
         if self._restored_from_state:
             self._restored_from_state = False
@@ -258,7 +238,7 @@ class Iterator:
             self.iterations = 0
 
     def create_batches(self):
-        self.batches = batch(self.data(), self.batch_size, self.batch_size_fn)
+        return batch(self.get_data_order(), self.dataset, self.batch_size, self.batch_size_fn)
 
     @property
     def epoch(self):
@@ -270,9 +250,10 @@ class Iterator:
         return math.ceil(len(self.dataset) / self.batch_size)
 
     def __iter__(self):
+        B = self.batch_constructor
         while True:
             self.init_epoch()
-            for idx, minibatch in enumerate(self.batches):
+            for idx, mini_batch in enumerate(self.batches_generator):
                 # fast-forward if loaded from state
                 if self._iterations_this_epoch > idx:
                     continue
@@ -283,10 +264,11 @@ class Iterator:
                     # be sorted by decreasing order, which requires reversing
                     # relative to typical sort keys
                     if self.sort:
-                        minibatch.reverse()  # because already sorted
+                        mini_batch.reverse()  # because already sorted
                     else:
-                        minibatch.sort(key=self.sort_key, reverse=True)
-                yield Batch(minibatch, self.dataset, self.device)
+                        mini_batch.sort(key=self.sort_key, reverse=True)
+                transformed = self.batch_transform(mini_batch)
+                yield B(transformed, self.dataset, self.device)
             if not self.repeat:
                 return
 
@@ -312,23 +294,23 @@ class BucketIterator(Iterator):
 
     def create_batches(self):
         if self.sort:
-            self.batches = batch(self.data(), self.batch_size,
-                                 self.batch_size_fn)
+            return super(BucketIterator, self).create_batches()
         else:
-            self.batches = pool(self.data(), self.batch_size,
-                                self.sort_key, self.batch_size_fn,
-                                random_shuffler=self.random_shuffler,
-                                shuffle=self.shuffle,
-                                sort_within_batch=self.sort_within_batch)
+            return pool(self.get_data_order(), self.dataset, self.batch_size,
+                        self.sort_key, self.batch_size_fn,
+                        random_shuffler=self.random_shuffler,
+                        shuffle=self.shuffle,
+                        sort_within_batch=self.sort_within_batch)
 
 
-def batch(data, batch_size, batch_size_fn=None):
+def batch(data_index, dataset, batch_size, batch_size_fn=None):
     """Yield elements from data in chunks of batch_size."""
     if batch_size_fn is None:
         def batch_size_fn(new, count, sofar):
             return count
     minibatch, size_so_far = [], 0
-    for ex in data:
+    for i in data_index:
+        ex = dataset[i]
         minibatch.append(ex)
         size_so_far = batch_size_fn(ex, len(minibatch), size_so_far)
         if size_so_far == batch_size:
@@ -341,7 +323,7 @@ def batch(data, batch_size, batch_size_fn=None):
         yield minibatch
 
 
-def pool(data, batch_size, key, batch_size_fn=lambda new, count, sofar: count,
+def pool(data_index, dataset, batch_size, key, batch_size_fn=lambda new, count, sofar: count,
          random_shuffler=None, shuffle=False, sort_within_batch=False):
     """Sort within buckets, then batch, then shuffle batches.
 
@@ -351,7 +333,7 @@ def pool(data, batch_size, key, batch_size_fn=lambda new, count, sofar: count,
     """
     if random_shuffler is None:
         random_shuffler = random.shuffle
-    for p in batch(data, batch_size * 100, batch_size_fn):
+    for p in batch(data_index, dataset, batch_size * 100, batch_size_fn):
         p_batch = batch(sorted(p, key=key), batch_size, batch_size_fn) \
             if sort_within_batch \
             else batch(p, batch_size, batch_size_fn)
