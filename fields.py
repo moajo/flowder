@@ -90,7 +90,8 @@ class TextField(Field):
 
     def __init__(
             self,
-            target_set,
+            name,
+            target_source,
             tokenize=lambda s: s.split(),
             lower=False,
             vocab_processor=BuildVocab(),
@@ -115,7 +116,8 @@ class TextField(Field):
             loading_process.append(_include_length)
 
         super(TextField, self).__init__(
-            target_set,
+            name,
+            target_source,
             preprocess=preprocess,
             process=process,
             loading_process=loading_process,

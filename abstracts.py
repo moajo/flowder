@@ -94,7 +94,7 @@ def create_cache_iter_tree(fields):
     cached_iters = {}
     leafs = []
     for f in fields:
-        ts = f.target_set
+        ts = f.target_source
         ts_id = id(ts)
         if ts_id not in cached_iters:
             cached_iters[ts_id] = CachedIterator(ts)
@@ -226,7 +226,7 @@ class Dataset(SourceBase):
     - random access
     """
 
-    def __init__(self, fields: Iterable, size: int, return_as_tuple=True):
+    def __init__(self, fields: Iterable, size: int, return_as_tuple=False):
         """
         note: fieldsの各要素はnameが未設定の場合、このタイミングで自動的に設定されます
         :param fields:
@@ -299,28 +299,33 @@ class Dataset(SourceBase):
 
 class Field:
     """
-    データセットの各データの特定の位置に対して処理するやつTODO
+    データソースに変換、統計処理を行う
+    複数のFieldを束ねてDatasetにする。
     """
 
-    def __init__(self, target_set, preprocess=None, process=None, loading_process=None, batch_process=None):
+    def __init__(self, name, target_source, preprocess=None, process=None, loading_process=None, batch_process=None):
         """
 
-        :param target_set:
+        :param name: str
+        :param target_source: index accessible iterable collection
         :param preprocess: 共通前処理。map。関数のリスト
         :param process: preprocessに続く前処理。Processorのリスト
         :param loading_process: 後処理。map。関数のリスト
         :param batch_process:
         """
-        self.name = None
-        self.target_set = target_set
+        assert name is not None
+        assert target_source is not None
 
-        self.preprocess = preprocess or []  # list。ただの写像
-        self.process = process or []  # 開始と終了通知のある関数
+        self.name = name
+        self.target_source = target_source
+
+        self.preprocess = preprocess or []
+        self.process = process or []
         self.loading_process = loading_process or []
         self.batch_process = batch_process or []
 
     def __getitem__(self, item):
-        v = self.target_set[item]
+        v = self.target_source[item]
         return self.calculate_value(v)
 
     def start_preprocess_data_feed(self):

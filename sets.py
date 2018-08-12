@@ -23,7 +23,7 @@ class Source(SourceBase):
         assert size is not None
 
         if len(fields) == 0:
-            fields = [Field(self)]
+            fields = [Field("raw", self)]
         return Dataset(
             fields=fields,
             size=size,
@@ -229,8 +229,7 @@ class TextFileSource(Source):
         return StrSource(self)
 
     def calculate_size(self):
-        with self.path.open(encoding="utf-8") as f:
-            return sum(1 for _ in f)
+        return 1
 
     def __getitem__(self, item):
         if item != 0:
