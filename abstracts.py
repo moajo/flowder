@@ -18,6 +18,22 @@ class SourceBase:
             self._size = self.calculate_size()
         return self._size
 
+    @property
+    def parent(self):
+        assert len(self.parents) == 1
+        return self.parents[0]
+
+    def to(self, source_ctor):
+        """
+        convert to other kind of source
+        :param source_ctor:
+        :return:
+        """
+        return source_ctor(self)
+
+    def to_list(self):
+        return list(self)
+
     def calculate_size(self):
         """
         データサイズを計算。createまでに呼ばれる
@@ -48,6 +64,14 @@ class SourceBase:
         :return:
         """
         raise NotImplementedError()
+
+# class DependentSource(SourceBase):
+#     def __init__(self, *parents):
+#         assert type(parents) is tuple
+#         self.parents: [SourceBase] = parents or []
+#         self.children = []
+#         self._size = None
+#
 
 
 def cache_last_value():

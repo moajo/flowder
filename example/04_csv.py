@@ -1,17 +1,34 @@
 import sys, os
+from pathlib import Path
+
+import numpy as np
+
+from abstracts import Field
+from sources import ImageSource
 
 sys.path.append(os.pardir)
 from fields import TextField
-from sources import Example
-from utils import zip_source, file, create_dataset
+from utils import zip_source, file, create_dataset, directory, collect
 
-iris = file("data/IRIS.csv").csv()
+iris = file("data/IRIS.csv").csv(header=None)
 
 for data in iris:
-    assert isinstance(data, list)
+    assert isinstance(data, tuple)
     first = iris[0]
     all(a == b for a, b in zip(first, data))
     break
 
-for column1 in iris.item[0]:
-    assert isinstance(column1, str)
+for index, values in iris:
+    assert np.issubdtype(type(index), np.integer)
+    assert isinstance(values, dict)
+
+d = directory("example/data/celebA/img_align_celeba")
+for p in d.item.suffix == ".jpg":
+    assert isinstance(p, Path)
+
+anno = file("example/data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")
+assert len(anno) == 8
+imgs = collect(anno.item[0], d.item.name, d).to(ImageSource)
+
+img = Field("img", process=mean(), postprocess=whitening())
+ds = imgs.create_datsset()

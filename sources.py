@@ -13,15 +13,18 @@ from moajo_tool.utils import measure_time
 from tqdm import tqdm
 
 from abstracts import Field, SourceBase
+import pandas as pd
+from PIL import Image
 
 
-def cache_value():
+def cache_value(cache_arg_index=0):
     def decorator(func):
         cache = {}
 
-        def wrapper(arg):
+        def wrapper(*args):
+            arg = args[cache_arg_index]
             if arg not in cache:
-                cache[arg] = func(arg)
+                cache[arg] = func(*args)
             return cache[arg]
 
         return wrapper
@@ -34,14 +37,21 @@ class MapDummy:  # TODO equalsを実装してfilterに
     to make map source easily
     """
 
-    def __init__(self, source):
+    def __init__(self, source, root):
         self.source = source
+        self.root = root
+        assert not isinstance(root, MapDummy)
 
     def __getitem__(self, item):
-        return MapSource(lambda x: x[item], parent=self.source)
+        return MapDummy(MapSource(lambda x: x[item], parent=self.source), self.root)
 
     def __getattr__(self, item):
-        return MapSource(lambda x: getattr(x, item), parent=self.source)
+        return MapDummy(MapSource(lambda x: getattr(x, item), parent=self.source), self.root)
+
+    def __iter__(self):
+        return iter(self.source)
+
+    # def __eq__(self, other):
 
 
 class Source(SourceBase):
@@ -77,7 +87,7 @@ class Source(SourceBase):
         # mapped = MapSource(lambda x:x.hoge, source)
         :return:
         """
-        return MapDummy(self)
+        return MapDummy(self, self)
 
 
 class MapSource(Source):
@@ -103,6 +113,53 @@ class MapSource(Source):
     def __iter__(self):
         for d in self.parents[0]:
             yield self.transform(d)
+
+
+# class EnumerableSource(Source):
+#     def __init__(self, parent):
+#         super(EnumerableSource, self).__init__(parent)
+#
+#     def calculate_size(self):
+#         return len(self.parent)
+#
+#     def calculate_value(self, args):
+#         yield args
+#
+#     def __getitem__(self, item):
+#         assert isinstance(item, int)
+#         return item, self.parent[item]
+#
+
+
+class FilterSource(Source):
+    """
+    this Source iterate value filterd by pred from parent source
+    """
+
+    def __init__(self, pred, parent: Source):
+        super(FilterSource, self).__init__(parent)
+        self.pred = pred
+
+    def calculate_size(self):
+        return sum(1 for _ in self)
+
+    def calculate_value(self, arg):
+        yield arg
+
+    def __getitem__(self, item):
+        if not isinstance(item, int):
+            raise NotImplementedError()
+
+        for d in self:
+            if item == 0:
+                return d
+            item = -1
+        raise IndexError("index out of range")
+
+    def __iter__(self):
+        for d in self.parent:
+            if self.pred(d):
+                yield d
 
 
 class ZipSource(Source):
@@ -244,7 +301,6 @@ class StrSource(Source):
     def __init__(self, parent):
         assert type(parent) is TextFileSource
         super(StrSource, self).__init__(parent)
-        self.parent = parent
 
     def split(self, delimiter=" "):
         return MapSource(lambda x: x.split(delimiter), self)
@@ -279,8 +335,8 @@ class TextFileSource(Source):
     def lines(self):
         return StrSource(self)
 
-    def csv(self):
-        return CSVSource(self)
+    def csv(self, **kwargs):
+        return CSVSource(self.path, **kwargs)
 
     def calculate_size(self):
         return 1
@@ -295,30 +351,157 @@ class TextFileSource(Source):
             yield f
 
 
-class CSVSource(Source):
-    def __init__(self, parent):
-        assert type(parent) is TextFileSource
-        super(CSVSource, self).__init__(parent)
+class HookSource(Source):
+    def __init__(self, parent, getitem_callback, iter_callback):
+        super(HookSource, self).__init__(parent)
+        self.getitem_callback = getitem_callback
+        self.iter_callback = iter_callback
 
     def calculate_size(self):
-        for f in self.parents[0]:
-            return sum(1 for _ in f)
-
-    def calculate_value(self, file_source):
-        reader = csv.reader(file_source)
-        for line in reader:
-            yield line
+        return len(self.parents[0])
 
     def __getitem__(self, item):
-        assert type(item) is int
-        line = linecache.getline(str(self.parents[0].path), item + 1)
-        reader = csv.reader(StringIO(line))
-        return next(iter(reader))
+        self.getitem_callback(item)
+        return self.parents[0][item]
 
     def __iter__(self):
-        for f in self.parents[0]:
-            for line in self.calculate_value(f):
-                yield line
+        self.iter_callback()
+        for v in self.parents[0]:
+            yield v
+
+
+class DirectorySource(Source):
+    def __init__(self, path):
+        super(DirectorySource, self).__init__()
+        self.path = pathlib.Path(path)
+
+    def open(self, **kwargs):
+        return MapSource(lambda p: open(p, **kwargs), self)
+
+    def image(self):
+        return ImageSource(self)
+
+    def calculate_size(self):
+        assert self.path.exists()
+        return sum(1 for _ in self.path.iterdir())
+
+    def __getitem__(self, item):
+        return list(self.path.iterdir())[item]
+
+    def __iter__(self):
+        return self.path.iterdir()
+
+
+class ArraySource(Source):
+    def __init__(self, contents):
+        super(ArraySource, self).__init__()
+        self.contents = contents
+
+    def calculate_size(self):
+        return len(self.contents)
+
+    def __getitem__(self, item):
+        return self.contents[item]
+
+    def __iter__(self):
+        return iter(self.contents)
+
+
+class ImageSource(Source):
+    def __init__(self, path_source: SourceBase):
+        super(ImageSource, self).__init__(path_source)
+
+    def calculate_size(self):
+        return len(self.parent)
+
+    def calculate_value(self, path):
+        yield Image.open(path)
+
+    def __getitem__(self, item):
+        p = self.parent[item]
+        if isinstance(item, int):
+            if isinstance(p, str):
+                p = pathlib.Path(p)
+
+            assert isinstance(p, pathlib.Path)
+            return Image.open(p)
+        else:
+            ps = p
+            ps = [
+                pathlib.Path(p) if isinstance(p, str) else p
+                for p in ps
+            ]
+            assert all(isinstance(p, pathlib.Path) for p in ps)
+
+            return [Image.open(p) for p in ps]
+
+    def __iter__(self):
+        for p in self.parent:
+            yield Image.open(p)
+
+
+class CSVSource(Source):
+    def __init__(self, path_or_buffer, **kwargs):
+        super(CSVSource, self).__init__()
+        self.data_frame = pd.read_csv(path_or_buffer, **kwargs)
+
+    def calculate_size(self):
+        return len(self.data_frame)
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            v = self.data_frame[item:item + 1]
+            index, data = next(v.iterrows())
+            return index, {key: data[key] for key in v.keys()}
+        v = self.data_frame[item]
+        return [
+            (
+                index,
+                {key: data[key] for key in data.keys()}
+            )
+            for index, data in v.iterrows()]
+
+    def __iter__(self):
+        return (
+            (
+                index,
+                {key: data[key] for key in data.keys()}
+            )
+            for index, data in self.data_frame.iterrows())
+
+
+class CollectSource(SourceBase):
+    def __init__(self, base_source: SourceBase, key_index_map: dict, target_source: SourceBase):
+        """
+
+        :param base_source: 元となるソース
+        :param key_index_map: base_sourceの値に対応するtarget_sourceのindexを保持するdict
+        :param target_source: base_sourceと等しい値を持つindexをtarget_key_sourceから探し、そのインデックスでアクセスされるソース
+        """
+        super(CollectSource, self).__init__(base_source, target_source)
+        self.base_source = base_source
+        self.target_source = target_source
+        self.key_index_map = key_index_map
+
+    def calculate_size(self):
+        return len(self.base_source)
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            key = self.base_source[item]
+            index = self.key_index_map[key]
+            return self.target_source[index]
+        else:
+            keys = self.base_source[item]
+            return [
+                self.target_source[index]
+                for index in (self.key_index_map[key] for key in keys)
+            ]
+
+    def __iter__(self):
+        for key in self.base_source:
+            index = self.key_index_map[key]
+            yield self.target_source[index]
 
 
 class CachedIterator:
@@ -476,7 +659,7 @@ class Dataset(SourceBase):
             if f.name is None:
                 f.name = f"attr{nameless_count}"
                 nameless_count += 1
-        self._memory_cache = None
+        self._memory_cache = None  # TODO deprecate
 
     def load_to_memory(self):
         if self._memory_cache is not None:
@@ -520,10 +703,15 @@ class Dataset(SourceBase):
             ]
             yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
-    def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ
+    def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
         if self._memory_cache is not None:
             return self._memory_cache[item]
-        vs = [f[item] for f in self.fields]
+        leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
+        vs = [
+            f.calculate_value(leaf[item])  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
+            for f, leaf in zip(self.fields, leaf_iterators)
+        ]
+        # vs = [f[item] for f in self.fields]
         return create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def __len__(self):

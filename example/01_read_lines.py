@@ -2,7 +2,6 @@ import sys, os
 
 sys.path.append(os.pardir)
 from utils import file
-from sources import Example
 
 files = file("data/kftt.ja")
 assert len(files) == 1, "contains just a file"
@@ -21,7 +20,8 @@ for spl in lines.split():
 
 datsset = lines.create()
 for example in datsset:
-    assert isinstance(example, Example), "as default, Dataset iterate Example instance"
+    assert isinstance(example, dict), "as default, Dataset iterate dict instance"
+    assert "raw" in example, "as default, example key is 'raw'. because fields is not given on create()"
 
 datsset = lines.create(return_as_tuple=True)
 for example in datsset:
