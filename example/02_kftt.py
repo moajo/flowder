@@ -41,6 +41,9 @@ for third_column in special_delimiter_text.item[3]:
     break
 f = Field("ja", special_delimiter_text.item[3])
 dataset = special_delimiter_text.create(f)
+
+for japanese_column in dataset:
+    pass
 for japanese_column in dataset.item["ja"]:
     assert isinstance(japanese_column, str)
     assert "現在" in japanese_column

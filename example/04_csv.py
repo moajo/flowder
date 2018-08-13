@@ -22,13 +22,13 @@ for index, values in iris:
     assert np.issubdtype(type(index), np.integer)
     assert isinstance(values, dict)
 
-d = directory("example/data/celebA/img_align_celeba")
-for p in d.item.suffix == ".jpg":
-    assert isinstance(p, Path)
+d = directory("data/celebA/img_align_celeba")
+# for p in d.item.suffix == ".jpg":
+#     assert isinstance(p, Path)
 
-anno = file("example/data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")
+anno = file("data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")
 assert len(anno) == 8
 imgs = collect(anno.item[0], d.item.name, d).to(ImageSource)
 
-img = Field("img", process=mean(), postprocess=whitening())
-ds = imgs.create_datsset()
+# img = Field("img", process=mean(), postprocess=whitening())
+# ds = imgs.create_datsset()

@@ -40,13 +40,14 @@ class MapDummy:  # TODO equalsを実装してfilterに
     def __init__(self, source, root):
         self.source = source
         self.root = root
+        assert isinstance(source, SourceBase)
         assert not isinstance(root, MapDummy)
 
     def __getitem__(self, item):
-        return MapDummy(MapSource(lambda x: x[item], parent=self.source), self.root)
+        return MapSource(lambda x: x[item], parent=self.source)
 
     def __getattr__(self, item):
-        return MapDummy(MapSource(lambda x: getattr(x, item), parent=self.source), self.root)
+        return MapSource(lambda x: getattr(x, item), parent=self.source)
 
     def __iter__(self):
         return iter(self.source)
@@ -97,6 +98,7 @@ class MapSource(Source):
 
     def __init__(self, transform, parent: Source):
         super(MapSource, self).__init__(parent)
+        assert isinstance(parent, SourceBase)
         self.transform = transform
 
     def calculate_size(self):
@@ -111,7 +113,7 @@ class MapSource(Source):
         )
 
     def __iter__(self):
-        for d in self.parents[0]:
+        for d in self.parent:
             yield self.transform(d)
 
 
@@ -668,7 +670,7 @@ class Dataset(SourceBase):
 
     @property
     def item(self):
-        return MapDummy(self)
+        return MapDummy(self, self)
 
     @measure_time()
     def preprocess(self):
@@ -706,12 +708,12 @@ class Dataset(SourceBase):
     def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
         if self._memory_cache is not None:
             return self._memory_cache[item]
-        leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
-        vs = [
-            f.calculate_value(leaf[item])  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
-            for f, leaf in zip(self.fields, leaf_iterators)
-        ]
-        # vs = [f[item] for f in self.fields]
+        # leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
+        # vs = [
+        #     f.calculate_value(leaf[item])  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
+        #     for f, leaf in zip(self.fields, leaf_iterators)
+        # ]
+        vs = [f[item] for f in self.fields]
         return create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def __len__(self):
