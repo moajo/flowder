@@ -23,6 +23,10 @@ class SourceBase:
         assert len(self.parents) == 1
         return self.parents[0]
 
+    def is_independent(self):
+        """override me"""
+        return len(self.parents) == 0
+
     def to(self, source_ctor):
         """
         convert to other kind of source

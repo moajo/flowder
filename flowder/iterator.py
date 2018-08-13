@@ -128,6 +128,35 @@ def default_sequence_collate(batch):
     return vs
 
 
+def create_iterator(
+        dataset,
+        batch_size,
+        shuffle,
+        sort_key_within_batch,
+        collate_fn=default_sequence_collate,
+        device=None,
+        sampler=None,
+        num_workers=0,
+        pin_memory=False,
+        drop_last=False,
+        timeout=0,
+        worker_init_fn=None,
+):
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        sampler=sampler,
+        num_workers=num_workers,
+        collate_fn=lambda x: x,
+        pin_memory=pin_memory,
+        drop_last=drop_last,
+        timeout=timeout,
+        worker_init_fn=worker_init_fn,
+    )
+    return Iterator(loader, sort_key_within_batch, collate_fn=collate_fn, device=device)
+
+
 def create_bucket_iterator(
         dataset,
         batch_size,
@@ -144,6 +173,7 @@ def create_bucket_iterator(
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size * over_sampling_rate,
+        shuffle=True,
         sampler=sampler,
         num_workers=num_workers,
         collate_fn=lambda x: x,
@@ -167,6 +197,13 @@ def data_to_device(data, device):
 
 class Iterator:
     def __init__(self, batch_iterator, sort_key_within_batch, collate_fn=default_sequence_collate, device=None):
+        """
+
+        :param batch_iterator: Dataset
+        :param sort_key_within_batch:
+        :param collate_fn:
+        :param device:
+        """
         self.batch_iterator = batch_iterator
         self.sort_key_within_batch = sort_key_within_batch
         self.collate_fn = collate_fn
@@ -176,21 +213,12 @@ class Iterator:
         sort_key = self.sort_key_within_batch
         device = self.device
         collate_fn = self.collate_fn
-        if sort_key is not None:
-            for batch in self.batch_iterator:
-                sorted_batch = sorted(batch, key=sort_key)
-                if device is not None:
-                    raw = data_to_device(sorted_batch, device=device)
-                else:
-                    raw = sorted_batch
-                yield collate_fn(raw)
-            else:
-                for batch in self.batch_iterator:
-                    if device is not None:
-                        raw = data_to_device(batch, device=device)
-                    else:
-                        raw = batch
-                    yield collate_fn(raw)
+        for batch in self.batch_iterator:
+            if sort_key is not None:
+                batch = sorted(batch, key=sort_key)
+            if device is not None:
+                batch = data_to_device(batch, device=device)
+            yield collate_fn(batch)
 
 
 class BucketIterator:

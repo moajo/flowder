@@ -554,7 +554,7 @@ class CachedIterator:
             return self.value
         self.last_i = i
 
-        if not self.is_independent:  # 依存ソース
+        if not self.dataset.is_independent():  # 依存ソース
             if self.iter is None:
                 for p in self.parents:
                     p.next(i)
@@ -648,7 +648,10 @@ def create_example(field_names, vs, return_as_tuple=True):
 
 class Dataset(SourceBase):
     """
-    fieldsとsetをつなぐ。torchのDatasetを継承。
+    fieldsとsetをつなぐSource
+    複数のFieldからのデータイテレーションを最適化する
+    fieldsのプリプロセスを最適化して行う
+
     機能は
     - fieldsの前処理の制御
     - 全体反復
@@ -683,6 +686,9 @@ class Dataset(SourceBase):
     @property
     def item(self):
         return MapDummy(self, self)
+
+    def is_independent(self):
+        return True
 
     @measure_time()
     def preprocess(self):
