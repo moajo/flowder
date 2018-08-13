@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='moajoloader',
+    name='flowder',
     version='0.1',
     description='data loader for ML',
     author='moajo',

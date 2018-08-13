@@ -1,5 +1,5 @@
-from moajoloader.abstracts import Field, SourceBase
-from moajoloader.sources import TextFileSource, ZipSource, Dataset, DirectorySource, CollectSource
+from flowder.abstracts import Field, SourceBase
+from flowder.sources import TextFileSource, ZipSource, Dataset, DirectorySource, CollectSource
 
 
 def file(path):

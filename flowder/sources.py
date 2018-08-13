@@ -12,7 +12,7 @@ from typing import Iterable
 from moajo_tool.utils import measure_time
 from tqdm import tqdm
 
-from moajoloader.abstracts import Field, SourceBase
+from flowder.abstracts import Field, SourceBase
 import pandas as pd
 from PIL import Image
 
@@ -694,7 +694,7 @@ class Dataset(SourceBase):
         for f in tqdm(fields, desc="preprocess closing"):
             f.finish_preprocess_data_feed()
 
-    def __iter__(self):
+    def __iter__(self):  # TODO preprocess未処理時にエラー?
         if self._memory_cache is not None:
             return iter(self._memory_cache)
         leaf_iterators = create_cache_iter_tree(self.fields)

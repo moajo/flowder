@@ -8,6 +8,7 @@ from torchtext.vocab import Vocab
 class Processor:
     """
     データ全件をなめる前処理
+    複数のFieldで同時に使われることもある。
     """
 
     def __call__(self, preprocessed_value):
@@ -36,6 +37,7 @@ class BuildVocab(Processor):
                  pad_token="<pad>",
                  additional_special_token=None,
                  cache_file=None,
+                 vocab=None,
                  **kwargs
                  ):
         self.unk_token = unk_token
@@ -43,7 +45,7 @@ class BuildVocab(Processor):
         self.additional_special_token = additional_special_token or []
         self.cache_file = Path(cache_file) if cache_file is not None else None
 
-        self.vocab = None
+        self.vocab = vocab
         self.word_counter = Counter()
         self._kwargs = kwargs
 

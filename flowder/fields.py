@@ -1,5 +1,5 @@
-from moajoloader.abstracts import Field
-from moajoloader.processors import BuildVocab
+from flowder.abstracts import Field
+from flowder.processors import BuildVocab
 
 
 def lowercase(tokenized):
@@ -13,6 +13,20 @@ def _include_length(data):
 def _numericalize(vocab_processor):
     def wrapper(data):
         return [vocab_processor.vocab.stoi[word] for word in data]
+
+    return wrapper
+
+
+def _add_sos(sos_token):
+    def wrapper(data: list):
+        return [sos_token] + data
+
+    return wrapper
+
+
+def _add_eos(eos_token):
+    def wrapper(data: list):
+        return data + [eos_token]
 
     return wrapper
 
@@ -95,8 +109,10 @@ class TextField(Field):
             tokenize=lambda s: s.split(),
             lower=False,
             vocab_processor=BuildVocab(),
-            include_length=False,
+            sos_token=None,
+            eos_token=None,
             numericalize=True,
+            include_length=False,
     ):
         preprocess = []
         if tokenize:
@@ -109,6 +125,14 @@ class TextField(Field):
             process.append(vocab_processor)
 
         loading_process = []
+        if eos_token is not None:
+            loading_process.append(
+                _add_eos(eos_token)
+            )
+        if sos_token is not None:
+            loading_process.append(
+                _add_sos(sos_token)
+            )
         if numericalize:
             assert vocab_processor
             loading_process.append(_numericalize(vocab_processor))
