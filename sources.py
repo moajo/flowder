@@ -424,12 +424,12 @@ def create_cache_iter_tree(fields):
     return leafs
 
 
-class Example:
-    def __init__(self, data_dict):
-        self._keys = []
-        for name, v in data_dict.items():
-            setattr(self, name, v)
-            self._keys.append(name)
+# class Example:
+#     def __init__(self, data_dict):
+#         self._keys = []
+#         for name, v in data_dict.items():
+#             setattr(self, name, v)
+#             self._keys.append(name)
 
 
 def create_example(field_names, vs, return_as_tuple=True):
@@ -445,7 +445,8 @@ def create_example(field_names, vs, return_as_tuple=True):
         if len(vs) == 1:
             return vs[0]
         return tuple(vs)
-    return Example(OrderedDict(zip(field_names, vs)))
+    # return Example(OrderedDict(zip(field_names, vs)))
+    return {k: v for k, v in zip(field_names, vs)}
 
 
 class Dataset(SourceBase):

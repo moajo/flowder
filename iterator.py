@@ -3,18 +3,27 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from copy import deepcopy
 import torch
-import math
+import numpy as np
 
-from sources import Example
+from torch.utils.data.dataloader import default_collate
+
+
+# from sources import Example
 
 
 def convert_data_to_example(data):
-    if type(data) is tuple:
-        data = OrderedDict([(f"attr{n}", v) for n, v in enumerate(data)])
+    """
 
-    if hasattr(data, "items"):
-        data = Example(data)
-    assert type(data) is Example
+    :param data: tuple,dict or Example
+    :return:
+    """
+    if isinstance(data, tuple):
+        # data = OrderedDict([(f"attr{n}", v) for n, v in enumerate(data)])
+        data = {f"attr{n}": v for n, v in enumerate(data)}
+
+    # if hasattr(data, "items"):
+    #     data = Example(data)
+    # assert isinstance(data, Example)
     return data
 
 
@@ -52,25 +61,6 @@ class Batch:
         for k in keys:
             batch = [getattr(x, k) for x in data]
             setattr(self, k, batch)
-
-    # self.fields = dataset.fields.keys()  # copy field names
-
-    # for (name, field) in dataset.fields.items():
-    #     if field is not None:
-    #         batch = [getattr(x, name) for x in data]
-    #         setattr(self, name, field.process(batch, device=device, train=train))
-
-    # @classmethod
-    # def fromvars(cls, dataset, batch_size, train=True, **kwargs):
-    #     """Create a Batch directly from a number of Variables."""
-    #     batch = cls()
-    #     batch.batch_size = batch_size
-    #     batch.dataset = dataset
-    #     batch.train = train
-    #     batch.fields = dataset.fields.keys()
-    #     for k, v in kwargs.items():
-    #         setattr(batch, k, v)
-    #     return batch
 
     def __repr__(self):
         return str(self)
@@ -116,230 +106,114 @@ def _short_str(tensor):
     return strt
 
 
-class RandomShuffler(object):
-    """Use random functions while keeping track of the random state to make it
-    reproducible and deterministic."""
+def default_sequence_collate(batch):
+    """
+    シーケンスデータに対応したdefault_collate
+    listはシーケンスデータとみなす
+    tupleはデータの構造とみなして再帰的に適用する
+    :param batch:
+    :return:
+    """
+    if isinstance(batch[0], tuple):
+        transposed = zip(*batch)
+        vs = [default_sequence_collate(samples) for samples in transposed]
+        return vs
+    if isinstance(batch[0], list):
+        if isinstance(batch[0][0], int):
+            return [torch.LongTensor(data) for data in batch]
 
-    def __init__(self, random_state=None):
-        self._random_state = random_state
-        if self._random_state is None:
-            self._random_state = random.getstate()
+        if isinstance(batch[0][0], float):
+            return [torch.FloatTensor(data) for data in batch]
+    vs = default_collate(batch)
+    return vs
 
-    @contextmanager
-    def use_internal_state(self):
-        """Use a specific RNG state."""
-        old_state = random.getstate()
-        random.setstate(self._random_state)
-        yield
-        self._random_state = random.getstate()
-        random.setstate(old_state)
 
-    @property
-    def random_state(self):
-        return deepcopy(self._random_state)
+def create_bucket_iterator(
+        dataset,
+        batch_size,
+        sort_key,
+        sampler=None,
+        num_workers=0,
+        collate_fn=default_sequence_collate,
+        pin_memory=False,
+        drop_last=False,
+        timeout=0,
+        worker_init_fn=None,
+        over_sampling_rate=100,
+):
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size * over_sampling_rate,
+        sampler=sampler,
+        num_workers=num_workers,
+        collate_fn=lambda x: x,
+        pin_memory=pin_memory,
+        drop_last=drop_last,
+        timeout=timeout,
+        worker_init_fn=worker_init_fn,
+    )
+    return BucketIterator(loader, batch_size, sort_key, over_sampling_rate=over_sampling_rate, collate_fn=collate_fn)
 
-    @random_state.setter
-    def random_state(self, s):
-        self._random_state = s
 
-    def __call__(self, data):
-        """Shuffle and return a new list."""
-        with self.use_internal_state():
-            return random.sample(data, len(data))
+def data_to_device(data, device):
+    if isinstance(data, tuple):
+        return tuple(data_to_device(b, device) for b in data)
+    if isinstance(data, dict):
+        return {key: data_to_device(data[key], device) for key in data}
+    if isinstance(data, torch.Tensor):
+        return data.to(device)
+    return data
 
 
 class Iterator:
-    """
-    データセットを学習イテレーションに供給するイテレータ
-    バッチ変換、パディング、シャッフル、テンソルへの変換などを行う
-    """
-
-    def __init__(self, dataset, batch_size, sort_key=None, device=None,
-                 batch_size_fn=None,
-                 repeat=None, shuffle=None, sort=None,
-                 sort_within_batch=None,
-                 batch_constructor=Batch,
-                 batch_transforms=None):
-        """
-        datasetはランダムアクセスできれば何でもいい。
-        その値はExampleかtupleかdict
-        tupleは名前を自動的につけてdictに
-        dictはexampleに変換される
-
-
-        :param dataset:
-        :param batch_size:
-        :param sort_key:
-        :param device:
-        :param batch_size_fn:
-        :param train:
-        :param repeat:
-        :param shuffle:
-        :param sort:
-        :param sort_within_batch:
-        """
-        self.batch_constructor = batch_constructor
-        self.batch_size, self.dataset = batch_size, dataset
-        self.batch_size_fn = batch_size_fn
-        self.iterations = 0
-        self.repeat = repeat
-        self.shuffle = shuffle
-        self.sort = sort
-        self.batch_transforms = batch_transforms or []
-        if sort_within_batch is None:
-            self.sort_within_batch = self.sort
-        else:
-            self.sort_within_batch = sort_within_batch
-        self.sort_key = sort_key
+    def __init__(self, batch_iterator, sort_key_within_batch, collate_fn=default_sequence_collate, device=None):
+        self.batch_iterator = batch_iterator
+        self.sort_key_within_batch = sort_key_within_batch
+        self.collate_fn = collate_fn
         self.device = device
-        if not torch.cuda.is_available() and self.device is None:
-            self.device = -1
-
-        self.random_shuffler = RandomShuffler()
-
-        # For state loading/saving only
-        self._iterations_this_epoch = 0
-        self._random_state_this_epoch = None
-        self._restored_from_state = False
-        self.batches_generator = None
-
-    def batch_transform(self, mini_batch):
-        for t in self.batch_transforms:
-            mini_batch = t(mini_batch)
-        return mini_batch
-
-    def get_data_order(self):
-        if self.sort:
-            return [
-                i for i, v in
-                sorted(enumerate(self.dataset), key=lambda i, v: self.sort_key(v))
-            ]
-        elif self.shuffle:
-            return [i for i in self.random_shuffler(range(len(self.dataset)))]
-        else:
-            return list(range(len(self.dataset)))
-
-    def init_epoch(self):
-        """Set up the batch generator for a new epoch."""
-
-        if self._restored_from_state:
-            self.random_shuffler.random_state = self._random_state_this_epoch
-        else:
-            self._random_state_this_epoch = self.random_shuffler.random_state
-
-        self.batches_generator = self.create_batches()
-
-        if self._restored_from_state:
-            self._restored_from_state = False
-        else:
-            self._iterations_this_epoch = 0
-
-        if not self.repeat:
-            self.iterations = 0
-
-    def create_batches(self):
-        return batch(self.get_data_order(), self.dataset, self.batch_size, self.batch_size_fn)
-
-    @property
-    def epoch(self):
-        return math.floor(self.iterations / len(self))
-
-    def __len__(self):
-        if self.batch_size_fn is not None:
-            raise NotImplementedError
-        return math.ceil(len(self.dataset) / self.batch_size)
 
     def __iter__(self):
-        B = self.batch_constructor
-        while True:
-            self.init_epoch()
-            for idx, mini_batch in enumerate(self.batches_generator):
-                # fast-forward if loaded from state
-                if self._iterations_this_epoch > idx:
-                    continue
-                self.iterations += 1
-                self._iterations_this_epoch += 1
-                if self.sort_within_batch:
-                    # NOTE: `rnn.pack_padded_sequence` requires that a minibatch
-                    # be sorted by decreasing order, which requires reversing
-                    # relative to typical sort keys
-                    if self.sort:
-                        mini_batch.reverse()  # because already sorted
+        sort_key = self.sort_key_within_batch
+        device = self.device
+        collate_fn = self.collate_fn
+        if sort_key is not None:
+            for batch in self.batch_iterator:
+                sorted_batch = sorted(batch, key=sort_key)
+                if device is not None:
+                    raw = data_to_device(sorted_batch, device=device)
+                else:
+                    raw = sorted_batch
+                yield collate_fn(raw)
+            else:
+                for batch in self.batch_iterator:
+                    if device is not None:
+                        raw = data_to_device(batch, device=device)
                     else:
-                        mini_batch.sort(key=self.sort_key, reverse=True)
-                transformed = self.batch_transform(mini_batch)
-                yield B(transformed, self.dataset, self.device)
-            if not self.repeat:
-                return
-
-    def state_dict(self):
-        return {
-            "iterations": self.iterations,
-            "iterations_this_epoch": self._iterations_this_epoch,
-            "random_state_this_epoch": self._random_state_this_epoch}
-
-    def load_state_dict(self, state_dict):
-        self.iterations = state_dict["iterations"]
-        self._iterations_this_epoch = state_dict["iterations_this_epoch"]
-        self._random_state_this_epoch = state_dict["random_state_this_epoch"]
-        self._restored_from_state = True
+                        raw = batch
+                    yield collate_fn(raw)
 
 
-class BucketIterator(Iterator):
-    """Defines an iterator that batches examples of similar lengths together.
+class BucketIterator:
+    def __init__(self, batch_iterator, batch_size, sort_key, over_sampling_rate,
+                 collate_fn=default_sequence_collate, device=None):
+        self.batch_iterator = batch_iterator
+        self.batch_size = batch_size
+        self.sort_key = sort_key
+        self.over_sampling_rate = over_sampling_rate
+        self.collate_fn = collate_fn
+        self.device = device
 
-    Minimizes amount of padding needed while producing freshly shuffled
-    batches for each new epoch. See pool for the bucketing procedure used.
-    """
-
-    def create_batches(self):
-        if self.sort:
-            return super(BucketIterator, self).create_batches()
-        else:
-            return pool(self.get_data_order(), self.dataset, self.batch_size,
-                        self.sort_key, self.batch_size_fn,
-                        random_shuffler=self.random_shuffler,
-                        shuffle=self.shuffle,
-                        sort_within_batch=self.sort_within_batch)
-
-
-def batch(data_index, dataset, batch_size, batch_size_fn=None):
-    """Yield elements from data in chunks of batch_size."""
-    if batch_size_fn is None:
-        def batch_size_fn(new, count, sofar):
-            return count
-    minibatch, size_so_far = [], 0
-    for i in data_index:
-        ex = dataset[i]
-        minibatch.append(ex)
-        size_so_far = batch_size_fn(ex, len(minibatch), size_so_far)
-        if size_so_far == batch_size:
-            yield minibatch
-            minibatch, size_so_far = [], 0
-        elif size_so_far > batch_size:
-            yield minibatch[:-1]
-            minibatch, size_so_far = minibatch[-1:], batch_size_fn(ex, 1, 0)
-    if minibatch:
-        yield minibatch
-
-
-def pool(data_index, dataset, batch_size, key, batch_size_fn=lambda new, count, sofar: count,
-         random_shuffler=None, shuffle=False, sort_within_batch=False):
-    """Sort within buckets, then batch, then shuffle batches.
-
-    Partitions data into chunks of size 100*batch_size, sorts examples within
-    each chunk using sort_key, then batch these examples and shuffle the
-    batches.
-    """
-    if random_shuffler is None:
-        random_shuffler = random.shuffle
-    for p in batch(data_index, dataset, batch_size * 100, batch_size_fn):
-        p_batch = batch(sorted(p, key=key), batch_size, batch_size_fn) \
-            if sort_within_batch \
-            else batch(p, batch_size, batch_size_fn)
-        if shuffle:
-            for b in random_shuffler(list(p_batch)):
-                yield b
-        else:
-            for b in list(p_batch):
-                yield b
+    def __iter__(self):
+        batch_size = self.batch_size
+        device = self.device
+        collate_fn = self.collate_fn
+        for over_batch in self.batch_iterator:
+            try:
+                sorted_over_batch = sorted(over_batch, key=self.sort_key)
+            except KeyError:
+                raise KeyError("Failed to sort batch: is sort_key correct?")
+            for i in np.random.permutation(range(0, len(sorted_over_batch), batch_size)):
+                raw = sorted_over_batch[i:i + batch_size]
+                if device is not None:
+                    raw = data_to_device(raw, device)
+                yield collate_fn(raw)
