@@ -101,7 +101,7 @@ class Field:
     複数のFieldを束ねてDatasetにする。
     """
 
-    def __init__(self, name, target_source, preprocess=None, process=None, loading_process=None, batch_processor=None):
+    def __init__(self, name, target_source, preprocess=None, process=None, loading_process=None):
         """
 
         :param name: str
@@ -120,7 +120,6 @@ class Field:
         self.preprocess = preprocess or []
         self.process = process or []
         self.loading_process = loading_process or []
-        self.batch_processor = batch_processor or []
 
     def __getitem__(self, item):
         v = self.target_source[item]
@@ -153,16 +152,10 @@ class Field:
             v = ld(v)
         return v
 
-    def batch_process(self, batch):
-        for bp in self.batch_processor:
-            batch = bp(batch)
-        return batch
-
     def clone(self, dataset):
         return Field(
             self.name,
             dataset, self.preprocess,
             self.process,
             self.loading_process,
-            self.batch_process,
         )

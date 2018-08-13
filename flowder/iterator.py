@@ -118,6 +118,12 @@ def default_sequence_collate(batch):
         transposed = zip(*batch)
         vs = [default_sequence_collate(samples) for samples in transposed]
         return vs
+    if isinstance(batch[0], dict):
+        vs = {
+            key: default_sequence_collate([d[key] for d in batch])
+            for key in batch[0]
+        }
+        return vs
     if isinstance(batch[0], list):
         if isinstance(batch[0][0], int):
             return [torch.LongTensor(data) for data in batch]
@@ -135,6 +141,7 @@ def create_iterator(
         sort_key_within_batch,
         collate_fn=default_sequence_collate,
         device=None,
+        batch_transforms=None,
         sampler=None,
         num_workers=0,
         pin_memory=False,
@@ -154,13 +161,20 @@ def create_iterator(
         timeout=timeout,
         worker_init_fn=worker_init_fn,
     )
-    return Iterator(loader, sort_key_within_batch, collate_fn=collate_fn, device=device)
+    return Iterator(
+        loader,
+        sort_key_within_batch,
+        collate_fn=collate_fn,
+        batch_transforms=batch_transforms,
+        device=device)
 
 
 def create_bucket_iterator(
         dataset,
         batch_size,
         sort_key,
+        device=None,
+        batch_transforms=None,
         sampler=None,
         num_workers=0,
         collate_fn=default_sequence_collate,
@@ -182,7 +196,15 @@ def create_bucket_iterator(
         timeout=timeout,
         worker_init_fn=worker_init_fn,
     )
-    return BucketIterator(loader, batch_size, sort_key, over_sampling_rate=over_sampling_rate, collate_fn=collate_fn)
+    return BucketIterator(
+        loader,
+        batch_size,
+        sort_key,
+        over_sampling_rate=over_sampling_rate,
+        collate_fn=collate_fn,
+        batch_transforms=batch_transforms,
+        device=device
+    )
 
 
 def data_to_device(data, device):
@@ -196,7 +218,12 @@ def data_to_device(data, device):
 
 
 class Iterator:
-    def __init__(self, batch_iterator, sort_key_within_batch, collate_fn=default_sequence_collate, device=None):
+    def __init__(self,
+                 batch_iterator,
+                 sort_key_within_batch,
+                 collate_fn=default_sequence_collate,
+                 batch_transforms=None,
+                 device=None):
         """
 
         :param batch_iterator: Dataset
@@ -207,7 +234,9 @@ class Iterator:
         self.batch_iterator = batch_iterator
         self.sort_key_within_batch = sort_key_within_batch
         self.collate_fn = collate_fn
+        self.batch_transforms = batch_transforms or []
         self.device = device
+        assert isinstance(self.batch_transforms, list)
 
     def __iter__(self):
         sort_key = self.sort_key_within_batch
@@ -216,19 +245,29 @@ class Iterator:
         for batch in self.batch_iterator:
             if sort_key is not None:
                 batch = sorted(batch, key=sort_key)
+            batch = collate_fn(tuple(batch))
             if device is not None:
                 batch = data_to_device(batch, device=device)
-            yield collate_fn(batch)
+            for t in self.batch_transforms:
+                batch = t(batch)
+            yield batch
 
 
 class BucketIterator:
-    def __init__(self, batch_iterator, batch_size, sort_key, over_sampling_rate,
-                 collate_fn=default_sequence_collate, device=None):
+    def __init__(self,
+                 batch_iterator,
+                 batch_size,
+                 sort_key,
+                 over_sampling_rate,
+                 collate_fn=default_sequence_collate,
+                 batch_transforms=None,
+                 device=None):
         self.batch_iterator = batch_iterator
         self.batch_size = batch_size
         self.sort_key = sort_key
         self.over_sampling_rate = over_sampling_rate
         self.collate_fn = collate_fn
+        self.batch_transforms = batch_transforms
         self.device = device
 
     def __iter__(self):
@@ -242,6 +281,9 @@ class BucketIterator:
                 raise KeyError("Failed to sort batch: is sort_key correct?")
             for i in np.random.permutation(range(0, len(sorted_over_batch), batch_size)):
                 raw = sorted_over_batch[i:i + batch_size]
+                batch = collate_fn(tuple(raw))
                 if device is not None:
-                    raw = data_to_device(raw, device)
-                yield collate_fn(raw)
+                    batch = data_to_device(batch, device)
+                for t in self.batch_transforms:
+                    batch = t(batch)
+                yield batch

@@ -704,6 +704,8 @@ class Dataset(SourceBase):
         ]
         if len(fields) == 0:
             print("preprocess is not needed for any fields")
+            for f in tqdm(self.fields, desc="preprocess closing"):
+                f.finish_preprocess_data_feed()
             return
         leaf_iterators = create_cache_iter_tree(fields)
         for i in tqdm(range(self.size), desc=f"preprocessing {len(fields)} fields"):
