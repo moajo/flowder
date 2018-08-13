@@ -57,6 +57,7 @@ class BuildVocab(Processor):
         if self.cache_file is not None and self.cache_file.exists():
             with self.cache_file.open("rb") as f:
                 self.word_counter = pickle.load(f)
+                assert isinstance(self.word_counter, Counter)
             return False
 
     def finish_preprocess_data_feed(self, field):
@@ -97,7 +98,7 @@ def tensor_pad_sequence(field_name, include_length, padding_value=1):
             prem = [batch[field_name][0][i][:, None] for i in indices]
             padded = pad_sequence(prem, padding_value=padding_value)
             result = padded[:, indices.sort()[1], 0]
-            batch[field_name][0] = result
+            batch[field_name] = result, batch[field_name][1]
         else:
             length = [len(a) for a in batch[field_name]]
             _, indices = length.sort(descending=True)
