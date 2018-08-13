@@ -247,7 +247,7 @@ class FileCacheSource(MemoryCacheSource):
         :param cache_immediately: 即座にデータをロード、キャッシュファイルを作成する
         :param cache_dir: キャッシュファイルが作られるディレクトリ
         """
-        super(FileCacheSource, self).__init__(parent)
+        super(FileCacheSource, self).__init__(parent, load_immediately=False)
         self.data = None
         self.cache_group_name = cache_group_name
         self.cache_dir = pathlib.Path(cache_dir)
@@ -281,16 +281,28 @@ class FileCacheSource(MemoryCacheSource):
         return self.data
 
     def load(self, cache_if_not_yet=True):
+        """
+        データが読み込み済みならそれを返す。
+        読み込み済みでなければ、キャッシュファイルが存在すればそこからロードする。
+        キャッシュファイルが無ければ、データを読み込む。
+        その後、cache_if_not_yet=Trueなら、キャッシュファイルを作る。
+        :param cache_if_not_yet:
+        :return:
+        """
+        if self.data is not None:
+            return self.data
         if self.cache_file_path.exists():
+            print("[flowder.FileCacheSource]load from cache file...")
             with self.cache_file_path.open("rb") as f:
                 self.data = pickle.load(f)
                 self.parents = []
                 return self.data
         else:
             if self.data is None:
-                self.data = list(self.parents[0])
+                self.data = list(tqdm(self.parent, desc="[flowder.FileCacheSource]loading to memory..."))
                 self.parents = []
             if cache_if_not_yet:
+                print("[flowder.FileCacheSource]create cache file...")
                 self._make_cache()
             return self.data
 
@@ -666,7 +678,7 @@ class Dataset(SourceBase):
     def load_to_memory(self):
         if self._memory_cache is not None:
             return
-        self._memory_cache = list(self)
+        self._memory_cache = list(tqdm(self, desc="loading to memory..."))
 
     @property
     def item(self):
