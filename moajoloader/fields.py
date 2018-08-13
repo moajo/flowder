@@ -1,5 +1,5 @@
-from abstracts import Field
-from processors import BuildVocab
+from moajoloader.abstracts import Field
+from moajoloader.processors import BuildVocab
 
 
 def lowercase(tokenized):

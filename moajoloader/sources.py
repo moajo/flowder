@@ -12,7 +12,7 @@ from typing import Iterable
 from moajo_tool.utils import measure_time
 from tqdm import tqdm
 
-from abstracts import Field, SourceBase
+from moajoloader.abstracts import Field, SourceBase
 import pandas as pd
 from PIL import Image
 

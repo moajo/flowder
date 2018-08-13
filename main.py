@@ -2,13 +2,13 @@ import torch
 from moajo_tool.utils import measure_time
 from torch.utils.data.dataloader import default_collate
 
-from abstracts import Field
-from iterator import create_bucket_iterator
-from utils import file, create_dataset, directory, collect
-from fields import TextField
+from moajoloader.abstracts import Field
+from moajoloader.iterator import create_bucket_iterator
+from moajoloader.utils import file, create_dataset, directory, collect
+from moajoloader.fields import TextField
 # from iterator import Iterator
-from processors import BuildVocab
-from sources import Source, TextFileSource, ZipSource, ImageSource
+from moajoloader.processors import BuildVocab
+from moajoloader.sources import Source, TextFileSource, ZipSource, ImageSource
 import torchtext as txt
 import torchnet as tnt
 from tqdm import tqdm

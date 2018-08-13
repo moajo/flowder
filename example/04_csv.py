@@ -3,12 +3,12 @@ from pathlib import Path
 
 import numpy as np
 
-from abstracts import Field
-from sources import ImageSource
+from moajoloader.abstracts import Field
+from moajoloader.sources import ImageSource
 
 sys.path.append(os.pardir)
-from fields import TextField
-from utils import zip_source, file, create_dataset, directory, collect
+from moajoloader.fields import TextField
+from moajoloader.utils import zip_source, file, create_dataset, directory, collect
 
 iris = file("data/IRIS.csv").csv(header=None)
 

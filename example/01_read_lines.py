@@ -1,7 +1,7 @@
 import sys, os
 
 sys.path.append(os.pardir)
-from utils import file
+from moajoloader.utils import file
 
 files = file("data/kftt.ja")
 assert len(files) == 1, "contains just a file"
