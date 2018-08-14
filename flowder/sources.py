@@ -55,7 +55,14 @@ class MapDummy:  # TODO equalsを実装してfilterに
 class Source(SourceBase):
 
     def on_memory(self):
-        return MemoryCacheSource(self)
+        """
+        メモリ上にロードする
+        :return:
+        """
+        return OnMemorySource(self)
+
+    def cache(self):
+        return MemCacheSource(self)
 
     def create(self, *fields, return_as_tuple=False):
         """
@@ -91,7 +98,7 @@ class Source(SourceBase):
         return MapSource(transform, self)
 
     def filter(self, pred):
-        return FilterSource(pred, self)
+        return ImmediateFilterSource(pred, self)
 
 
 class MapSource(Source):
@@ -105,7 +112,7 @@ class MapSource(Source):
         self.transform = transform
 
     def calculate_size(self):
-        return self.parents[0].calculate_size()
+        return self.parent.calculate_size()
 
     def calculate_value(self, arg):
         yield self.transform(arg)
@@ -136,37 +143,6 @@ class MapSource(Source):
 #
 
 
-class FilterSource(Source):
-    """
-    this Source iterate value filterd by pred from parent source
-    """
-
-    def __init__(self, pred, parent: Source):
-        super(FilterSource, self).__init__(parent)
-        self.pred = pred
-
-    def calculate_size(self):
-        return sum(1 for _ in self)
-
-    def calculate_value(self, arg):
-        yield arg
-
-    def __getitem__(self, item):
-        if not isinstance(item, int):
-            raise NotImplementedError()
-
-        for d in self:
-            if item == 0:
-                return d
-            item = -1
-        raise IndexError("index out of range")
-
-    def __iter__(self):
-        for d in self.parent:
-            if self.pred(d):
-                yield d
-
-
 class ZipSource(Source):
     """
     zip to tuple
@@ -193,27 +169,132 @@ class ZipSource(Source):
             yield d
 
 
-class MemoryCacheSource(Source):
-    def __init__(self, parent, load_immediately=True):
-        super(MemoryCacheSource, self).__init__(parent)
+class LazyLoadSource(Source):
+    def __init__(self, parent, load_immediately=False):
+        super(LazyLoadSource, self).__init__(parent, has_length=False)
         self.data = None
         if load_immediately:
             self.load()
+            self.has_length = True
 
-    def load(self):
-        if self.data is None:
-            self.data = list(self.parents[0])
-            self.parents = []
-        return self.data
+    def load(self, show_progress=True):
+        raise NotImplementedError()
 
     def calculate_size(self):
-        return len(self.load())
+        assert self.data is not None, "data is not loaded yet"
+        # self.load()
+        # self.has_length = True
+        return len(self.data)
 
     def __getitem__(self, item):
-        return self.load()[item]
+        self.load()
+        self.has_length = True
+        return self.data[item]
 
     def __iter__(self):
-        return iter(self.load())
+        self.load()
+        self.has_length = True
+        return iter(self.data)
+
+
+class OnMemorySource(LazyLoadSource):
+    """
+    メモリに乗せる。
+    はじめてのアクセスで自動的にロード
+    """
+
+    def load(self, show_progress=True):
+        if self.data is None:
+            d = self.parent
+            if show_progress:
+                if d.has_length:
+                    d = tqdm(d, desc="[MemoryCacheSource]loading...")
+                else:
+                    d = tqdm(iter(d), desc="[MemoryCacheSource]loading...")
+            self.data = list(d)
+            self.parents = []
+        return self
+
+
+class MemCacheSource(Source):
+    """
+    一度経由した値をキャッシュする
+    """
+
+    def __init__(self, parent):
+        super(MemCacheSource, self).__init__(parent)
+        self.cache = {}
+
+    def calculate_size(self):
+        return len(self.parent)
+
+    def __getitem__(self, item):
+        assert isinstance(item, int), "not support slice"
+        if item not in self.cache:
+            self.cache[item] = self.parent[item]
+        return self.cache.values[item]
+
+    def __iter__(self):
+        c = 0
+        for i, e in enumerate(self.parent):
+            self.cache[i] = e
+            c += 1
+            yield e
+        self._size = c
+
+
+class ImmediateFilterSource(LazyLoadSource):
+
+    def __init__(self, pred, parent: Source):
+        self.pred = pred
+        super(ImmediateFilterSource, self).__init__(parent)
+
+    def load(self, show_progress=True):
+        p = tqdm(self.parent, desc="[ImmediateFilterSource]loading...") if show_progress else self.parent
+        pred = self.pred
+        self.data = [
+            d for d in p if pred(d)
+        ]
+        self.has_length = True
+
+
+class FilterSource(Source):
+    """
+    this Source iterate value filterd by pred from parent source
+    note: tqdmにそのまま入れるとlengthの計算を強いられるので注意
+    """
+
+    def __init__(self, pred, parent: Source):
+        super(FilterSource, self).__init__(parent, has_length=False)
+        self.pred = pred
+
+    def on_memory(self):
+        return ImmediateFilterSource(self.pred, self.parent)
+
+    def calculate_size(self):
+        return sum(1 for _ in self)
+
+    def calculate_value(self, arg):
+        yield arg
+
+    def __getitem__(self, item):
+        if not isinstance(item, int):
+            raise NotImplementedError()
+
+        for d in self:
+            if item == 0:
+                return d
+            item = -1
+        raise IndexError("index out of range")
+
+    def __iter__(self):
+        c = 0
+        for d in self.parent:
+            if self.pred(d):
+                c += 1
+                yield d
+
+        self._size = c
 
 
 def _calc_args_hash(args):
@@ -231,14 +312,14 @@ def _calc_args_hash(args):
     return hs
 
 
-class FileCacheSource(MemoryCacheSource):
+class FileCacheSource(OnMemorySource):
     """
     dataをファイルにキャッシュする
     キャッシュファイル名はcache_group_nameとcache_argsから計算される
 
     """
 
-    def __init__(self, parent, cache_group_name, *cache_args, cache_immediately=True, cache_dir=".tmp"):
+    def __init__(self, parent, cache_group_name, *cache_args, load_immediately=False, cache_dir=".tmp"):
         """
         キャッシュファイル名は
         `cache_group_name`_`HASH`
@@ -250,15 +331,12 @@ class FileCacheSource(MemoryCacheSource):
         :param cache_immediately: 即座にデータをロード、キャッシュファイルを作成する
         :param cache_dir: キャッシュファイルが作られるディレクトリ
         """
-        super(FileCacheSource, self).__init__(parent, load_immediately=False)
-        self.data = None
         self.cache_group_name = cache_group_name
         self.cache_dir = pathlib.Path(cache_dir)
         hs = _calc_args_hash(cache_args)
         self.cache_file_path = self.cache_dir / (self.cache_group_name + "_" + str(hs))
 
-        if cache_immediately:
-            self.load()
+        super(FileCacheSource, self).__init__(parent, load_immediately=load_immediately)
 
     def clear_cache(self, remove_all=False):
         """
@@ -293,7 +371,7 @@ class FileCacheSource(MemoryCacheSource):
         :return:
         """
         if self.data is not None:
-            return self.data
+            return self
         if self.cache_file_path.exists():
             print("[flowder.FileCacheSource]load from cache file...")
             with self.cache_file_path.open("rb") as f:
@@ -301,9 +379,7 @@ class FileCacheSource(MemoryCacheSource):
                 self.parents = []
                 return self.data
         else:
-            if self.data is None:
-                self.data = list(tqdm(self.parent, desc="[flowder.FileCacheSource]loading to memory..."))
-                self.parents = []
+            super(FileCacheSource, self).load()
             if cache_if_not_yet:
                 print("[flowder.FileCacheSource]create cache file...")
                 self._make_cache()

@@ -7,11 +7,12 @@ class SourceBase:
     マージするときなど親は複数になる
     """
 
-    def __init__(self, *parents):
+    def __init__(self, *parents, has_length=True):
         assert type(parents) is tuple
         self.parents: [SourceBase] = parents or []
         self.children = []
         self._size = None
+        self.has_length = has_length
 
     def __len__(self):
         if self._size is None:
