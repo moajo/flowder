@@ -238,9 +238,12 @@ class BucketIterator:
         self.length = length
 
     def __iter__(self):
-        for batch_generator in self.batch_generator_iterator:
-            for batch in batch_generator:
-                yield batch
+        def _generator(iter):
+            for batch_generator in iter:
+                for batch in batch_generator:
+                    yield batch
+
+        return _generator(iter(self.batch_generator_iterator))  # for start background loading
 
     def __len__(self):
         return self.length
