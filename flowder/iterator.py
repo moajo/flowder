@@ -25,6 +25,7 @@ def convert_data_to_example(data):
         data = {f"attr{n}": v for n, v in enumerate(data)}
     return data
 
+
 #
 # class Batch:
 #     """Defines a batch of examples along with its Fields.
@@ -158,10 +159,7 @@ def create_iterator(
         pin_memory=pin_memory,
         drop_last=drop_last,
     )
-    return Iterator(
-        loader,
-        len(dataset),
-        batch_size)
+    return Iterator(loader, len(dataset), batch_size)
 
 
 def create_bucket_iterator(
@@ -209,16 +207,6 @@ def create_bucket_iterator(
     return BucketIterator(iter_loader, l)
 
 
-# def data_to_device(data, device):
-#     if isinstance(data, tuple) or isinstance(data, list):
-#         return tuple(data_to_device(b, device) for b in data)
-#     if isinstance(data, dict):
-#         return {key: data_to_device(data[key], device) for key in data}
-#     if isinstance(data, torch.Tensor):
-#         return data.to(device)
-#     return data
-
-
 class Iterator:
     def __init__(self,
                  batch_iterator,
@@ -227,8 +215,9 @@ class Iterator:
                  device=None):
         """
 
-        :param batch_iterator: Dataset
-        :param sort_key_within_batch:
+        :param batch_iterator:
+        :param num_example:
+        :param batch_size:
         :param device:
         """
         self.batch_iterator = batch_iterator
@@ -237,20 +226,14 @@ class Iterator:
         self.device = device
 
     def __iter__(self):
-        device = self.device
-        for b in self.batch_iterator:
-            if device is not None:
-                b = data_to_device(b, device=device)  # transfortmと先のほうがいい？
-            yield b
+        return iter(self.batch_iterator)
 
     def __len__(self):
         return math.ceil(self.num_example / self.batch_size)
 
 
 class BucketIterator:
-    def __init__(self,
-                 batch_generator_iterator,
-                 length):
+    def __init__(self, batch_generator_iterator, length):
         self.batch_generator_iterator = batch_generator_iterator
         self.length = length
 

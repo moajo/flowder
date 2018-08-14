@@ -2,7 +2,6 @@ import pickle
 from collections import OrderedDict, Counter
 from pathlib import Path
 
-from torch.nn.utils.rnn import pad_sequence
 from torchtext.vocab import Vocab
 
 
@@ -90,22 +89,3 @@ class RawProcessor(Processor):
     def __call__(self, data):
         return data
 
-
-def tensor_pad_sequence(field_name, include_length, padding_value=1):
-    def wrapper(batch):
-        if include_length:
-            _, indices = batch[field_name][1].sort(descending=True)
-            prem = [batch[field_name][0][i][:, None] for i in indices]
-            padded = pad_sequence(prem, padding_value=padding_value)
-            result = padded[:, indices.sort()[1], 0]
-            batch[field_name] = result, batch[field_name][1]
-        else:
-            length = [len(a) for a in batch[field_name]]
-            _, indices = length.sort(descending=True)
-            prem = [batch[field_name][i][:, None] for i in indices]
-            padded = pad_sequence(prem, padding_value=padding_value)
-            result = padded[:, indices.sort()[1], 0]
-            batch[field_name] = result
-        return batch
-
-    return wrapper
