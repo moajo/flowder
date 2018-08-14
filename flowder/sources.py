@@ -54,7 +54,7 @@ class MapDummy:  # TODO equalsを実装してfilterに
 
 class Source(SourceBase):
 
-    def to_memory(self):
+    def on_memory(self):
         return MemoryCacheSource(self)
 
     def create(self, *fields, return_as_tuple=False):
@@ -86,6 +86,12 @@ class Source(SourceBase):
         :return:
         """
         return MapDummy(self, self)
+
+    def map(self, transform):
+        return MapSource(transform, self)
+
+    def filter(self, pred):
+        return FilterSource(pred, self)
 
 
 class MapSource(Source):
@@ -643,7 +649,7 @@ def create_example(field_names, vs, return_as_tuple=True):
     return {k: v for k, v in zip(field_names, vs)}
 
 
-class Dataset(SourceBase):
+class Dataset(Source):
     """
     fieldsとsetをつなぐSource
     複数のFieldからのデータイテレーションを最適化する

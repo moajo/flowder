@@ -112,7 +112,6 @@ class TextField(Field):
             sos_token=None,
             eos_token=None,
             numericalize=True,
-            include_length=False,
     ):
         preprocess = []
         if tokenize:
@@ -136,8 +135,6 @@ class TextField(Field):
         if numericalize:
             assert vocab_processor
             loading_process.append(_numericalize(vocab_processor))
-        if include_length:
-            loading_process.append(_include_length)
 
         super(TextField, self).__init__(
             name,

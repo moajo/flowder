@@ -40,7 +40,16 @@ def to_device(device):
     return wrapper
 
 
-def tensor_pad_sequence(field_names, include_length, padding_value=1):
+def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
+    """
+    可変長シーケンス列をpaddingする。
+    対象はtensorのlist。各tensorはshape[0]を長さとする。
+    同時にもともとの長さを1次元tensorとして作成し、元のフィールドを長さとのtupleに置き換える
+    :param field_names: strまたはstrのtuple
+    :param include_length: 長さ情報を残すか
+    :param padding_value:
+    :return:
+    """
     if isinstance(field_names, tuple):
         assert all(isinstance(a, str) for a in field_names)
     if isinstance(field_names, str):
@@ -49,18 +58,15 @@ def tensor_pad_sequence(field_names, include_length, padding_value=1):
 
     def wrapper(batch):
         for field_name in field_names:
+            length = torch.LongTensor([len(a) for a in batch[field_name]])
+            _, indices = length.sort(descending=True)
+            prem = [batch[field_name][i][:, None] for i in indices]
+            padded = pad_sequence(prem, padding_value=padding_value)
+            result = padded[:, indices.sort()[1], 0]
+
             if include_length:
-                _, indices = batch[field_name][1].sort(descending=True)
-                prem = [batch[field_name][0][i][:, None] for i in indices]
-                padded = pad_sequence(prem, padding_value=padding_value)
-                result = padded[:, indices.sort()[1], 0]
-                batch[field_name] = result, batch[field_name][1]
+                batch[field_name] = result, length
             else:
-                length = [len(a) for a in batch[field_name]]
-                _, indices = length.sort(descending=True)
-                prem = [batch[field_name][i][:, None] for i in indices]
-                padded = pad_sequence(prem, padding_value=padding_value)
-                result = padded[:, indices.sort()[1], 0]
                 batch[field_name] = result
         return batch
 
