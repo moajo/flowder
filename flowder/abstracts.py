@@ -1,32 +1,72 @@
+from tqdm import tqdm
+
+
 class SourceBase:
     """
     データソース
-    親があるならそれのみに依存。
-    なければ何らかの外部データに依存する。
-    （親があるけど、親以外のデータにも依存することは禁止）
-    マージするときなど親は複数になる
+    長さは計算可能かどうかを保持、calculate_sizeで計算する。未対応はhas_lengthでやる。
+    ランダムアクセスも可能かどうか。
+    親はマージするときなど複数になる
+    親の値に対してステートレス。
+    複数の親に対してはzipのみサポート
     """
 
-    def __init__(self, *parents, has_length=True):
-        assert type(parents) is tuple
-        self.parents: [SourceBase] = parents or []
-        self.children = []
-        self._size = None
-        self.has_length = has_length
+    def __init__(self, *parents, has_length=True, random_access=True, auto_load=False, show_progress_onload=False):
+        """
 
-    def __len__(self):
-        if self._size is None:
-            self._size = self.calculate_size()
-        return self._size
+        :param parents:
+        :param has_length: 長さを計算可能か
+        :param random_access: 可能か
+        :param auto_load: iterで自動的にロードするか
+        :param show_progress_onload: load時のshow_progressのデフォルト値
+        """
+        assert type(parents) is tuple
+        self.random_access = random_access
+        self.has_length = has_length  # 長さは計算可能かわからない。
+        self.parents: [SourceBase] = list(parents) or []
+        self._size = None  # 長さのキャッシュ
+        self._data = None
+        self.auto_load = auto_load
+        self.show_progress_onload = show_progress_onload
 
     @property
     def parent(self):
         assert len(self.parents) == 1
         return self.parents[0]
 
+    @property
+    def is_loaded(self):
+        return self._data is not None
+
+    def load(self, show_progress=None):
+        if show_progress is None:
+            show_progress = self.show_progress_onload
+        if not self.is_loaded:
+            d = self
+            if show_progress:
+                if d.has_length:
+                    l = len(d)
+                    d = tqdm(d._iter(), total=l, desc="[MemoryCacheSource]loading...")
+                else:
+                    d = tqdm(d._iter(), desc="[MemoryCacheSource]loading...")
+            self._data = list(d)
+            self.has_length = True
+            self.random_access = True
+        return self
+
+    @property
     def is_independent(self):
         """override me"""
-        return len(self.parents) == 0
+        if self.is_loaded:
+            return False
+        return self.__is_independent()
+
+    def __len__(self):
+        if self._size is None:
+            if not self.has_length:
+                raise ValueError("source has not length")
+            self._size = self.calculate_size()
+        return self._size
 
     def to(self, source_ctor):
         """
@@ -36,17 +76,40 @@ class SourceBase:
         """
         return source_ctor(self)
 
-    def to_list(self):
-        return list(self)
-
     def calculate_size(self):
         """
-        データサイズを計算。createまでに呼ばれる
+        ソースの要素数を計算する。
+        要素数が実際イテレーションするまで不明な場合に使う。
+        :return:
+        """
+        if self.is_loaded:
+            return len(self._data)
+        return self._calculate_size()
+
+    def __getitem__(self, item):
+        if self.is_loaded:
+            return self._data[item]
+        return self._getitem(item)
+
+    def __iter__(self):
+        if self.is_loaded:
+            return iter(self._data)
+        if self.auto_load:
+            self.load()
+        return self._iter()
+
+    def _iter(self):
+        raise NotImplementedError()
+
+    def _getitem(self, item):
+        """
+        ランダムアクセスに対応するなら実装
+        :param item:
         :return:
         """
         raise NotImplementedError()
 
-    def calculate_value(self, *args):
+    def _calculate_value(self, args):
         """
         親セットの値から値（のイテレータ）を計算するステートレスな関数
         独立ソースの場合、呼ばれない。
@@ -55,29 +118,12 @@ class SourceBase:
         """
         raise NotImplementedError()
 
-    def __getitem__(self, item):
-        """
-        ランダムアクセスに対応する必要あり
-        :param item:
-        :return:
-        """
+    def _calculate_size(self):
         raise NotImplementedError()
 
-    def __iter__(self):
-        """
-        iterableである必要あり
-        :return:
-        """
-        raise NotImplementedError()
-
-
-# class DependentSource(SourceBase):
-#     def __init__(self, *parents):
-#         assert type(parents) is tuple
-#         self.parents: [SourceBase] = parents or []
-#         self.children = []
-#         self._size = None
-#
+    def __is_independent(self):
+        """override me"""
+        return len(self.parents) == 0
 
 
 def cache_last_value():

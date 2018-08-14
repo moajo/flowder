@@ -1,17 +1,13 @@
 import hashlib
-import linecache
 import pathlib
 import pickle
 import sys
 from queue import Queue
 from typing import Iterable
 
-from moajo_tool.utils import measure_time
 from tqdm import tqdm
 
 from flowder.abstracts import Field, SourceBase
-import pandas as pd
-from PIL import Image
 
 
 def cache_value(cache_arg_index=0):
@@ -54,16 +50,6 @@ class MapDummy:  # TODO equalsを実装してfilterに
 
 class Source(SourceBase):
 
-    def on_memory(self):
-        """
-        メモリ上にロードする
-        :return:
-        """
-        return OnMemorySource(self)
-
-    def cache(self):
-        return MemCacheSource(self)
-
     def create(self, *fields, return_as_tuple=False):
         """
         create Dataset
@@ -98,7 +84,30 @@ class Source(SourceBase):
         return MapSource(transform, self)
 
     def filter(self, pred):
-        return ImmediateFilterSource(pred, self)
+        return FilterSource(pred, self)
+
+
+class WrapperSource(Source):
+    def __init__(self, parent, has_length=True, random_access=True, auto_load=False, show_progress_onload=False):
+        super(WrapperSource, self).__init__(
+            parent,
+            has_length=has_length,
+            random_access=random_access,
+            auto_load=auto_load,
+            show_progress_onload=show_progress_onload
+        )
+
+    def _calculate_size(self):
+        return self.parent.calculate_size()
+
+    def _calculate_value(self, args):
+        return self.parent._calculate_value(args)
+
+    def _getitem(self, item):
+        return self.parent[item]
+
+    def _iter(self):
+        return iter(self.parent)
 
 
 class MapSource(Source):
@@ -107,40 +116,27 @@ class MapSource(Source):
     """
 
     def __init__(self, transform, parent: Source):
-        super(MapSource, self).__init__(parent)
         assert isinstance(parent, SourceBase)
+        super(MapSource, self).__init__(
+            parent,
+            has_length=parent.has_length,
+            random_access=parent.random_access,
+        )
         self.transform = transform
 
-    def calculate_size(self):
+    def _calculate_size(self):
         return self.parent.calculate_size()
 
-    def calculate_value(self, arg):
+    def _calculate_value(self, arg):
         yield self.transform(arg)
 
-    def __getitem__(self, item):
+    def _getitem(self, item):
         return self.transform(
-            self.parents[0][item]
+            self.parent[item]
         )
 
-    def __iter__(self):
-        for d in self.parent:
-            yield self.transform(d)
-
-
-# class EnumerableSource(Source):
-#     def __init__(self, parent):
-#         super(EnumerableSource, self).__init__(parent)
-#
-#     def calculate_size(self):
-#         return len(self.parent)
-#
-#     def calculate_value(self, args):
-#         yield args
-#
-#     def __getitem__(self, item):
-#         assert isinstance(item, int)
-#         return item, self.parent[item]
-#
+    def _iter(self):
+        return (self.transform(d) for d in self.parent)
 
 
 class ZipSource(Source):
@@ -151,111 +147,44 @@ class ZipSource(Source):
 
     def __init__(self, *parents):
         assert len(parents) != 0
-        super(ZipSource, self).__init__(*parents)
+        super(ZipSource, self).__init__(
+            *parents,
+            has_length=parents[0].has_length,
+            random_access=all(p.random_access for p in parents)
+        )
 
-    def calculate_size(self):
+    def _calculate_size(self):
         sizes = [p.calculate_size() for p in self.parents]
         assert all(sizes[0] == s for s in sizes)
         return sizes[0]
 
-    def calculate_value(self, arg):
+    def _calculate_value(self, *arg):
         yield arg
 
-    def __getitem__(self, item):
-        return [p[item] for p in self.parents]
+    def _getitem(self, item):
+        return tuple(p[item] for p in self.parents)
 
-    def __iter__(self):
-        for d in zip(*self.parents):
-            yield d
-
-
-class LazyLoadSource(Source):
-    def __init__(self, parent, load_immediately=False):
-        super(LazyLoadSource, self).__init__(parent, has_length=False)
-        self.data = None
-        if load_immediately:
-            self.load()
-            self.has_length = True
-
-    def load(self, show_progress=True):
-        raise NotImplementedError()
-
-    def calculate_size(self):
-        assert self.data is not None, "data is not loaded yet"
-        # self.load()
-        # self.has_length = True
-        return len(self.data)
-
-    def __getitem__(self, item):
-        self.load()
-        self.has_length = True
-        return self.data[item]
-
-    def __iter__(self):
-        self.load()
-        self.has_length = True
-        return iter(self.data)
+    def _iter(self):
+        return zip(*self.parents)
 
 
-class OnMemorySource(LazyLoadSource):
+class OnMemorySource(WrapperSource):
     """
     メモリに乗せる。
     はじめてのアクセスで自動的にロード
     """
 
-    def load(self, show_progress=True):
-        if self.data is None:
-            d = self.parent
-            if show_progress:
-                if d.has_length:
-                    d = tqdm(d, desc="[MemoryCacheSource]loading...")
-                else:
-                    d = tqdm(iter(d), desc="[MemoryCacheSource]loading...")
-            self.data = list(d)
-            self.parents = []
-        return self
+    def __init__(self, parent, load_immediately=False, auto_load=True, show_progress_onload=True):
+        super(OnMemorySource, self).__init__(
+            parent,
+            has_length=parent.has_length,
+            random_access=parent.random_access,
+            auto_load=auto_load,
+            show_progress_onload=show_progress_onload
 
-
-class MemCacheSource(Source):
-    """
-    一度経由した値をキャッシュする
-    """
-
-    def __init__(self, parent):
-        super(MemCacheSource, self).__init__(parent)
-        self.cache = {}
-
-    def calculate_size(self):
-        return len(self.parent)
-
-    def __getitem__(self, item):
-        assert isinstance(item, int), "not support slice"
-        if item not in self.cache:
-            self.cache[item] = self.parent[item]
-        return self.cache.values[item]
-
-    def __iter__(self):
-        c = 0
-        for i, e in enumerate(self.parent):
-            self.cache[i] = e
-            c += 1
-            yield e
-        self._size = c
-
-
-class ImmediateFilterSource(LazyLoadSource):
-
-    def __init__(self, pred, parent: Source):
-        self.pred = pred
-        super(ImmediateFilterSource, self).__init__(parent)
-
-    def load(self, show_progress=True):
-        p = tqdm(self.parent, desc="[ImmediateFilterSource]loading...") if show_progress else self.parent
-        pred = self.pred
-        self.data = [
-            d for d in p if pred(d)
-        ]
-        self.has_length = True
+        )
+        if load_immediately:
+            self.load()
 
 
 class FilterSource(Source):
@@ -265,19 +194,21 @@ class FilterSource(Source):
     """
 
     def __init__(self, pred, parent: Source):
-        super(FilterSource, self).__init__(parent, has_length=False)
+        super(FilterSource, self).__init__(
+            parent,
+            has_length=False,
+            random_access=False,
+        )
         self.pred = pred
 
-    def on_memory(self):
-        return ImmediateFilterSource(self.pred, self.parent)
-
-    def calculate_size(self):
+    def _calculate_size(self):
         return sum(1 for _ in self)
 
-    def calculate_value(self, arg):
+    def _calculate_value(self, arg):
         yield arg
 
-    def __getitem__(self, item):
+    def _getitem(self, item):
+        print("TODO worning")
         if not isinstance(item, int):
             raise NotImplementedError()
 
@@ -287,7 +218,7 @@ class FilterSource(Source):
             item = -1
         raise IndexError("index out of range")
 
-    def __iter__(self):
+    def _iter(self):
         c = 0
         for d in self.parent:
             if self.pred(d):
@@ -312,14 +243,16 @@ def _calc_args_hash(args):
     return hs
 
 
-class FileCacheSource(OnMemorySource):
+class FileCacheSource(WrapperSource):
     """
     dataをファイルにキャッシュする
     キャッシュファイル名はcache_group_nameとcache_argsから計算される
 
     """
 
-    def __init__(self, parent, cache_group_name, *cache_args, load_immediately=False, cache_dir=".tmp"):
+    def __init__(self, parent, cache_group_name, *cache_args, cache_dir=".tmp",
+                 auto_load=True,
+                 show_progress_onload=True):
         """
         キャッシュファイル名は
         `cache_group_name`_`HASH`
@@ -331,12 +264,25 @@ class FileCacheSource(OnMemorySource):
         :param cache_immediately: 即座にデータをロード、キャッシュファイルを作成する
         :param cache_dir: キャッシュファイルが作られるディレクトリ
         """
+
+        super(FileCacheSource, self).__init__(
+            parent,
+            has_length=parent.has_length,
+            random_access=parent.has_length,
+            auto_load=auto_load,
+            show_progress_onload=show_progress_onload
+        )
+
         self.cache_group_name = cache_group_name
         self.cache_dir = pathlib.Path(cache_dir)
         hs = _calc_args_hash(cache_args)
         self.cache_file_path = self.cache_dir / (self.cache_group_name + "_" + str(hs))
+        self.cache_length_path = self.cache_dir / (self.cache_group_name + "_" + str(hs) + "_len")
 
-        super(FileCacheSource, self).__init__(parent, load_immediately=load_immediately)
+        if self.cache_length_path.exists():
+            with self.cache_length_path.open("rb") as f:
+                self._size = pickle.load(f)
+                self.has_length = True
 
     def clear_cache(self, remove_all=False):
         """
@@ -355,11 +301,36 @@ class FileCacheSource(OnMemorySource):
     def _make_cache(self):
         if self.cache_file_path.exists():
             return
-        if self.data is None:
+        if self._data is None:
             self.load(cache_if_not_yet=False)
         with self.cache_file_path.open("wb") as f:
-            pickle.dump(self.data, f)
-        return self.data
+            pickle.dump(self._data, f)
+        self.cache_length()
+        return self._data
+
+    def cache_length(self, show_progress=True):
+        """
+        データ読み込みはせず、長さだけキャッシュする。
+        初回は全データイテレーションするため遅いが、２回目以降はロードの必要がなくなる。
+        :return:
+        """
+        if self.cache_length_path.exists():
+            return
+
+        if self.has_length:
+            l = len(self)
+        else:
+            if show_progress:
+                desc = f"[flowder.FileCacheSource({self.cache_group_name})]loading data for cache length..."
+                l = sum(1 for _ in tqdm(self._iter(), desc=desc))
+            else:
+                l = sum(1 for _ in self._iter())
+
+        self._size = l
+        self.has_length = True
+        with self.cache_length_path.open("wb") as f:
+            pickle.dump(l, f)
+        return self
 
     def load(self, cache_if_not_yet=True):
         """
@@ -370,231 +341,56 @@ class FileCacheSource(OnMemorySource):
         :param cache_if_not_yet:
         :return:
         """
-        if self.data is not None:
+        if self.is_loaded:
             return self
         if self.cache_file_path.exists():
-            print("[flowder.FileCacheSource]load from cache file...")
+            print(f"[flowder.FileCacheSource({self.cache_group_name})]load from cache file...")
             with self.cache_file_path.open("rb") as f:
-                self.data = pickle.load(f)
-                self.parents = []
-                return self.data
+                data = pickle.load(f)
+                self._data = data
+                self.has_length = True
+                self.random_access = True
+                return self
         else:
             super(FileCacheSource, self).load()
             if cache_if_not_yet:
-                print("[flowder.FileCacheSource]create cache file...")
+                print(f"[flowder.FileCacheSource({self.cache_group_name})]create cache file...")
                 self._make_cache()
-            return self.data
+            return self
 
 
-class StrSource(Source):
-    """
-    特定ファイルの各行を返すソース
-    """
-
-    def __init__(self, parent):
-        assert type(parent) is TextFileSource
-        super(StrSource, self).__init__(parent)
-
-    def split(self, delimiter=" "):
-        return MapSource(lambda x: x.split(delimiter), self)
-
-    def calculate_size(self):
-        for f in self.parent:
-            return sum(1 for _ in f)
-
-    def calculate_value(self, file_source):
-        for line in file_source:
-            yield line[:-1]  # remove tailing \n
-
-    def __getitem__(self, item):
-        assert type(item) is int
-        return linecache.getline(str(self.parent.path), item + 1)
-
-    def __iter__(self):
-        for f in self.parent:
-            for line in self.calculate_value(f):
-                yield line
-
-
-class TextFileSource(Source):
-    """
-    iterate a single value which opened file
-    """
-
-    def __init__(self, path):
-        super(TextFileSource, self).__init__()
-        self.path = pathlib.Path(path)
-
-    def lines(self):
-        return StrSource(self)
-
-    def csv(self, **kwargs):
-        return CSVSource(self.path, **kwargs)
-
-    def calculate_size(self):
-        return 1
-
-    def __getitem__(self, item):
-        if item != 0:
-            raise IndexError()
-        return self.path.open(encoding="utf-8")
-
-    def __iter__(self):
-        with self.path.open(encoding="utf-8") as f:
-            yield f
-
-
-class HookSource(Source):
-    def __init__(self, parent, getitem_callback, iter_callback):
-        super(HookSource, self).__init__(parent)
-        self.getitem_callback = getitem_callback
-        self.iter_callback = iter_callback
-
-    def calculate_size(self):
-        return len(self.parents[0])
-
-    def __getitem__(self, item):
-        self.getitem_callback(item)
-        return self.parents[0][item]
-
-    def __iter__(self):
-        self.iter_callback()
-        for v in self.parents[0]:
-            yield v
-
-
-class DirectorySource(Source):
-    def __init__(self, path):
-        super(DirectorySource, self).__init__()
-        self.path = pathlib.Path(path)
-
-    def open(self, **kwargs):
-        return MapSource(lambda p: open(p, **kwargs), self)
-
-    def image(self):
-        return ImageSource(self)
-
-    def calculate_size(self):
-        assert self.path.exists()
-        return sum(1 for _ in self.path.iterdir())
-
-    def __getitem__(self, item):
-        return list(self.path.iterdir())[item]
-
-    def __iter__(self):
-        return self.path.iterdir()
-
-
-class ArraySource(Source):
-    def __init__(self, contents):
-        super(ArraySource, self).__init__()
-        self.contents = contents
-
-    def calculate_size(self):
-        return len(self.contents)
-
-    def __getitem__(self, item):
-        return self.contents[item]
-
-    def __iter__(self):
-        return iter(self.contents)
-
-
-class ImageSource(Source):
-    def __init__(self, path_source: SourceBase):
-        super(ImageSource, self).__init__(path_source)
-
-    def calculate_size(self):
-        return len(self.parent)
-
-    def calculate_value(self, path):
-        yield Image.open(path)
-
-    def __getitem__(self, item):
-        p = self.parent[item]
-        if isinstance(item, int):
-            if isinstance(p, str):
-                p = pathlib.Path(p)
-
-            assert isinstance(p, pathlib.Path)
-            return Image.open(p)
-        else:
-            ps = p
-            ps = [
-                pathlib.Path(p) if isinstance(p, str) else p
-                for p in ps
-            ]
-            assert all(isinstance(p, pathlib.Path) for p in ps)
-
-            return [Image.open(p) for p in ps]
-
-    def __iter__(self):
-        for p in self.parent:
-            yield Image.open(p)
-
-
-class CSVSource(Source):
-    def __init__(self, path_or_buffer, **kwargs):
-        super(CSVSource, self).__init__()
-        self.data_frame = pd.read_csv(path_or_buffer, **kwargs)
-
-    def calculate_size(self):
-        return len(self.data_frame)
-
-    def __getitem__(self, item):
-        if isinstance(item, int):
-            v = self.data_frame[item:item + 1]
-            index, data = next(v.iterrows())
-            return index, {key: data[key] for key in v.keys()}
-        v = self.data_frame[item]
-        return [
-            (
-                index,
-                {key: data[key] for key in data.keys()}
-            )
-            for index, data in v.iterrows()]
-
-    def __iter__(self):
-        return (
-            (
-                index,
-                {key: data[key] for key in data.keys()}
-            )
-            for index, data in self.data_frame.iterrows())
-
-
-class CollectSource(SourceBase):
-    def __init__(self, base_source: SourceBase, key_index_map: dict, target_source: SourceBase):
-        """
-
-        :param base_source: 元となるソース
-        :param key_index_map: base_sourceの値に対応するtarget_sourceのindexを保持するdict
-        :param target_source: base_sourceと等しい値を持つindexをtarget_key_sourceから探し、そのインデックスでアクセスされるソース
-        """
-        super(CollectSource, self).__init__(base_source, target_source)
-        self.base_source = base_source
-        self.target_source = target_source
-        self.key_index_map = key_index_map
-
-    def calculate_size(self):
-        return len(self.base_source)
-
-    def __getitem__(self, item):
-        if isinstance(item, int):
-            key = self.base_source[item]
-            index = self.key_index_map[key]
-            return self.target_source[index]
-        else:
-            keys = self.base_source[item]
-            return [
-                self.target_source[index]
-                for index in (self.key_index_map[key] for key in keys)
-            ]
-
-    def __iter__(self):
-        for key in self.base_source:
-            index = self.key_index_map[key]
-            yield self.target_source[index]
+# class CollectSource(SourceBase):
+#     def __init__(self, base_source: SourceBase, key_index_map: dict, target_source: SourceBase):
+#         """
+#
+#         :param base_source: 元となるソース
+#         :param key_index_map: base_sourceの値に対応するtarget_sourceのindexを保持するdict
+#         :param target_source: base_sourceと等しい値を持つindexをtarget_key_sourceから探し、そのインデックスでアクセスされるソース
+#         """
+#         super(CollectSource, self).__init__(base_source, target_source)
+#         self.base_source = base_source
+#         self.target_source = target_source
+#         self.key_index_map = key_index_map
+#
+#     def calculate_size(self):
+#         return len(self.base_source)
+#
+#     def __getitem__(self, item):
+#         if isinstance(item, int):
+#             key = self.base_source[item]
+#             index = self.key_index_map[key]
+#             return self.target_source[index]
+#         else:
+#             keys = self.base_source[item]
+#             return [
+#                 self.target_source[index]
+#                 for index in (self.key_index_map[key] for key in keys)
+#             ]
+#
+#     def __iter__(self):
+#         for key in self.base_source:
+#             index = self.key_index_map[key]
+#             yield self.target_source[index]
 
 
 class CachedIterator:
@@ -633,18 +429,18 @@ class CachedIterator:
             return self.value
         self.last_i = i
 
-        if not self.dataset.is_independent():  # 依存ソース
+        if not self.dataset.is_independent:  # 依存ソース
             if self.iter is None:
                 for p in self.parents:
                     p.next(i)
-                self.iter = self.dataset.calculate_value(*[p.value for p in self.parents])
+                self.iter = self.dataset._calculate_value(*[p.value for p in self.parents])
             try:
                 v = next(self.iter)
                 self.value = v
             except StopIteration:
                 for p in self.parents:
                     p.next(i)
-                self.iter = self.dataset.calculate_value(*[p.value for p in self.parents])
+                self.iter = self.dataset._calculate_value(*[p.value for p in self.parents])
                 v = next(self.iter)
                 self.value = v
         else:
@@ -748,13 +544,6 @@ class Dataset(Source):
         self.fields = list(fields)
         self.size = size
         self._return_as_tuple = return_as_tuple
-
-        # auto setting name to fields if not set.
-        nameless_count = 1
-        for f in self.fields:
-            if f.name is None:
-                f.name = f"attr{nameless_count}"
-                nameless_count += 1
         self._memory_cache = None  # TODO deprecate
 
     def load_to_memory(self):
@@ -769,7 +558,6 @@ class Dataset(Source):
     def is_independent(self):
         return True
 
-    @measure_time()
     def preprocess(self):
         """
         全fieldsのプリプロセスを実行
@@ -778,7 +566,7 @@ class Dataset(Source):
 
         fields = [
             f for f in
-            tqdm(self.fields, desc="preprocess initializing")
+            self.fields
             if f.start_preprocess_data_feed() is not False
         ]
         if len(fields) == 0:
@@ -787,13 +575,13 @@ class Dataset(Source):
                 f.finish_preprocess_data_feed()
             return
         leaf_iterators = create_cache_iter_tree(fields)
-        for i in tqdm(range(self.size), desc=f"preprocessing {len(fields)} fields"):
+        for i in range(self.size):
             for f, leaf in zip(fields, leaf_iterators):
                 f.processing_data_feed(leaf.next(i))
         for f in tqdm(fields, desc="preprocess closing"):
             f.finish_preprocess_data_feed()
 
-    def __iter__(self):  # TODO preprocess未処理時にエラー?
+    def _iter(self):  # TODO preprocess未処理時にエラー?
         if self._memory_cache is not None:
             return iter(self._memory_cache)
         leaf_iterators = create_cache_iter_tree(self.fields)
@@ -804,7 +592,7 @@ class Dataset(Source):
             ]
             yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
-    def __getitem__(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
+    def _getitem(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
         if self._memory_cache is not None:
             return self._memory_cache[item]
         # leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
@@ -815,8 +603,5 @@ class Dataset(Source):
         vs = [f[item] for f in self.fields]
         return create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
-    def __len__(self):
-        return self.size
-
-    def calculate_size(self):
+    def _calculate_size(self):
         return self.size

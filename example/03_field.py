@@ -19,7 +19,7 @@ for data in zipped:
     assert isinstance(e, str)
     break
 
-f1 = TextField("ja", ja, include_length=True)
+f1 = TextField("ja", ja)
 f2 = TextField("en", en, numericalize=False)
 datsset = create_dataset(len(ja), f1, f2)
 
@@ -27,19 +27,18 @@ datsset.preprocess()
 for example in datsset:
     assert isinstance(example, dict)
     assert "ja" in example
-    value, length = example["ja"]
-    assert isinstance(length, int)
+    value = example["ja"]
     assert isinstance(value, list)
     assert isinstance(value[0], int), "converted to word index(numericalize)"
     assert isinstance(example["en"], list)
     assert isinstance(example["en"][0], str), "disable numericalize"
 
 special_delimiter_text = file("data/special_delimiter.txt").lines().split("|||")
-f1 = TextField("ja", special_delimiter_text.item[3], include_length=True)
+f1 = TextField("ja", special_delimiter_text.item[3])
 f2 = TextField("en", special_delimiter_text.item[4], numericalize=False)
 dataset = special_delimiter_text.create(f1, f2)
 for data in dataset:
     assert isinstance(data["en"], list)
     assert isinstance(data["en"][0], str)
-    assert isinstance(data["ja"], tuple)
+    assert isinstance(data["ja"], list)
     break
