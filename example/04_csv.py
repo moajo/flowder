@@ -8,7 +8,7 @@ from flowder.abstracts import Field
 
 sys.path.append(os.pardir)
 from flowder.fields import TextField
-from flowder.utils import zip_source, file, create_dataset, directory
+from flowder.utils import file, directory
 
 iris = file("data/IRIS.csv").csv(header=None)
 
@@ -34,5 +34,5 @@ anno = file("data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")
 assert len(anno) == 8
 imgs = anno.item[0].map(lambda name: images_dir_path / name).to(ImageSource)
 
-img = Field("img", process=mean(), postprocess=whitening())
+# img = Field("img", process=mean(), postprocess=whitening())
 ds = imgs.create_datsset()

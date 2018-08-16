@@ -52,6 +52,7 @@ class BuildVocab(AggregateProcessor):
                  additional_special_token=None,
                  cache_file=None,
                  vocab=None,
+                 numericalize=True,
                  **kwargs
                  ):
         """
@@ -79,6 +80,7 @@ class BuildVocab(AggregateProcessor):
         self.pad_token = pad_token
         self.additional_special_token = additional_special_token
         self.cache_file = Path(cache_file) if cache_file is not None else None
+        self.numericalize = True
 
         self.vocab = vocab
         self.word_counter = Counter()
@@ -88,7 +90,7 @@ class BuildVocab(AggregateProcessor):
         if self.cache_file is not None and self.cache_file.exists():
             self.cache_file.unlink()
 
-    def __call__(self, tokenized_sentence):
+    def data_feed(self, tokenized_sentence):
         self.word_counter.update(tokenized_sentence)
 
     def start_data_feed(self, field):
@@ -100,6 +102,11 @@ class BuildVocab(AggregateProcessor):
 
     def finish_data_feed(self, field):
         self.build_vocab()
+
+    def __call__(self, tokenized_sentence):
+        if self.numericalize:
+            return [self.vocab.stoi[word] for word in tokenized_sentence]
+        return tokenized_sentence
 
     def build_vocab(self):
         specials = list(OrderedDict.fromkeys([

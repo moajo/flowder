@@ -20,7 +20,7 @@ class StrSource(Source):
         return MapSource(lambda x: x.split(delimiter), self)
 
     def _calculate_size(self):
-        with self.path.open() as f:
+        with self.path.open(encoding="utf-8") as f:
             return sum(1 for _ in f)
 
     def _getitem(self, item):
@@ -28,7 +28,7 @@ class StrSource(Source):
         return linecache.getline(str(self.path), item + 1)
 
     def _iter(self):
-        with self.path.open() as f:
+        with self.path.open(encoding="utf-8") as f:
             for line in f:
                 yield line[:-1]
 
