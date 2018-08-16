@@ -80,7 +80,7 @@ class BuildVocab(AggregateProcessor):
         self.pad_token = pad_token
         self.additional_special_token = additional_special_token
         self.cache_file = Path(cache_file) if cache_file is not None else None
-        self.numericalize = True
+        self.numericalize = numericalize
 
         self.vocab = vocab
         self.word_counter = Counter()

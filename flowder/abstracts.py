@@ -1,7 +1,9 @@
+import sys
+
 from tqdm import tqdm
 
 
-class SourceBase:
+class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
     """
     データソース
     長さは計算可能かどうかを保持、calculate_sizeで計算する。未対応はhas_lengthでやる。
@@ -11,7 +13,13 @@ class SourceBase:
     複数の親に対してはzipのみサポート
     """
 
-    def __init__(self, *parents, has_length=True, random_access=True, auto_load=False, show_progress_onload=False):
+    def __init__(self, *parents,
+                 has_length=True,
+                 random_access=True,
+                 auto_load=False,
+                 show_progress_onload=False,
+                 ):
+
         """
 
         :param parents:

@@ -2,7 +2,7 @@ from flowder.abstracts import Field
 from flowder.processors import BuildVocab
 
 
-def lowercase(tokenized):
+def _lowercase(tokenized):
     return [word.lower() for word in tokenized]
 
 
@@ -30,7 +30,7 @@ class TextField(Field):
             name,
             target_source,
             tokenize=lambda s: s.split(),
-            lower=False,
+            lowercase=False,
             vocab_processor=BuildVocab(),
             sos_token=None,
             eos_token=None,
@@ -38,8 +38,8 @@ class TextField(Field):
         preprocess = []
         if tokenize:
             preprocess.append(tokenize)
-        if lower:
-            preprocess.append(lowercase)
+        if lowercase:
+            preprocess.append(_lowercase)
 
         process = []
         if vocab_processor:

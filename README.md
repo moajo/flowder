@@ -76,16 +76,26 @@ ds.preprocess()# Fieldの前処理の実行
 また、開始時にデータをまとめてロードする必要がなくなります。
 BucketIteratorはシーケンスデータ用のイテレータで、バッチ内のシーケンスの長さが近くなるようにして計算効率を上げます。
 ```python
-train_iter = txt.data.BucketIterator(train, args.batch_size, shuffle=True, repeat=False,
-                                     sort_key=lambda a: len(a.src),
-                                     sort_within_batch=True,
-                                     device=args.gpu,
-                                     )
-test_iter = txt.data.Iterator(test, args.batch_size, shuffle=False, repeat=False,
-                              sort_key=lambda a: len(a.src),
-                              sort_within_batch=True,
-                              device=args.gpu,
-                              )
+batch_transforms = [
+    sort(sort_key),
+    default_create_batch(),
+    tensor_pad_sequence(("src", "trg"), include_length=True),
+]
+train_iter = flowder.create_bucket_iterator(
+    train,
+    args.batch_size,
+    sort_key=sort_key,
+    batch_transforms=batch_transforms,
+    device=device,
+)
+
+test_iter = flowder.create_iterator(
+    test,
+    args.batch_size,
+    shuffle=True,
+    batch_transforms=batch_transforms,
+    device=device,
+)
 ```
 
 # more example
