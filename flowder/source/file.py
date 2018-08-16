@@ -11,29 +11,26 @@ class StrSource(Source):
     特定ファイルの各行を返すソース
     """
 
-    def __init__(self, parent):
-        assert type(parent) is TextFileSource
-        super(StrSource, self).__init__(parent)
+    def __init__(self, path):
+        super(StrSource, self).__init__()
+        self.path = pathlib.Path(path)
+        assert self.path.exists()
 
     def split(self, delimiter=" "):
         return MapSource(lambda x: x.split(delimiter), self)
 
     def _calculate_size(self):
-        for f in self.parent:
+        with self.path.open() as f:
             return sum(1 for _ in f)
-
-    def _calculate_value(self, file_source):
-        for line in file_source:
-            yield line[:-1]  # remove tailing \n
 
     def _getitem(self, item):
         assert type(item) is int
-        return linecache.getline(str(self.parent.path), item + 1)
+        return linecache.getline(str(self.path), item + 1)
 
     def _iter(self):
-        for f in self.parent:
-            for line in self._calculate_value(f):
-                yield line
+        with self.path.open() as f:
+            for line in f:
+                yield line[:-1]
 
 
 class TextFileSource(Source):
@@ -46,7 +43,7 @@ class TextFileSource(Source):
         self.path = pathlib.Path(path)
 
     def lines(self):
-        return StrSource(self)
+        return StrSource(self.path)
 
     def csv(self, **kwargs):
         return CSVSource(self.path, **kwargs)

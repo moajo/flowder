@@ -1,5 +1,7 @@
 import math
+import queue
 import random
+import threading
 from collections import OrderedDict
 from contextlib import contextmanager
 from copy import deepcopy
@@ -26,84 +28,17 @@ def convert_data_to_example(data):
     return data
 
 
-#
-# class Batch:
-#     """Defines a batch of examples along with its Fields.
-#
-#     Attributes:
-#         batch_size: Number of examples in the batch.
-#         dataset: A reference to the dataset object the examples come from
-#             (which itself contains the dataset's Field objects).
-#         train: Whether the batch is from a training set.
-#
-#     Also stores the Variable for each column in the batch as an attribute.
-#     """
-#
-#     def __init__(self, data, dataset=None, device=None):
-#         """
-#         dataとして受け取るのは、
-#         - Exampleのリスト
-#
-#         :param data:
-#         :param dataset:
-#         :param device:
-#         """
-#         self.batch_size = len(data)
-#         self.dataset = dataset
-#
-#         assert len(data) != 0
-#
-#         data = [convert_data_to_example(d) for d in data]
-#
-#         keys = data[0]._keys
-#         self.keys = keys
-#
-#         for k in keys:
-#             batch = [getattr(x, k) for x in data]
-#             setattr(self, k, batch)
-#
-#     def __repr__(self):
-#         return str(self)
-#
-#     def __str__(self):
-#         if not self.__dict__:
-#             return 'Empty {} instance'.format(torch.typename(self))
-#
-#         var_strs = '\n'.join([f'\t[.{name}]:{_short_str(getattr(self, name))}'
-#                               for name in self.keys if hasattr(self, name)])
-#
-#         data_str = (' from {}'.format(self.dataset.name.upper())
-#                     if hasattr(self.dataset, 'name') and
-#                        isinstance(self.dataset.name, str) else '')
-#
-#         strt = '[{} of size {}{}]\n{}'.format(torch.typename(self),
-#                                               self.batch_size, data_str, var_strs)
-#         return '\n' + strt
-#
-#     def __len__(self):
-#         return self.batch_size
+def to_device(device):
+    def wrapper(batch):
+        if isinstance(batch, tuple) or isinstance(batch, list):
+            return tuple(wrapper(b) for b in batch)
+        if isinstance(batch, dict):
+            return {key: wrapper(batch[key]) for key in batch}
+        if isinstance(batch, torch.Tensor):
+            return batch.to(device)
+        return batch
 
-
-# def _short_str(tensor):
-#     # unwrap variable to tensor
-#     if not torch.is_tensor(tensor):
-#         # (1) unpack variable
-#         if hasattr(tensor, 'data'):
-#             tensor = getattr(tensor, 'data')
-#         # (2) handle include_lengths
-#         elif isinstance(tensor, tuple):
-#             return str(tuple(_short_str(t) for t in tensor))
-#         # (3) fallback to default str
-#         else:
-#             return str(tensor)
-#
-#     # copied from torch _tensor_str
-#     size_str = 'x'.join(str(size) for size in tensor.size())
-#     device_str = '' if not tensor.is_cuda else \
-#         ' (GPU {})'.format(tensor.get_device())
-#     strt = '[{} of size {}{}]'.format(torch.typename(tensor),
-#                                       size_str, device_str)
-#     return strt
+    return wrapper
 
 
 def default_sequence_collate(batch):
@@ -142,6 +77,7 @@ def create_iterator(
         num_workers=1,
         pin_memory=False,
         drop_last=False,
+        device=None,
 ):
     batch_transforms = batch_transforms or []
 
@@ -150,7 +86,7 @@ def create_iterator(
             batch = t(batch)
         return batch
 
-    loader = DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
@@ -159,7 +95,7 @@ def create_iterator(
         pin_memory=pin_memory,
         drop_last=drop_last,
     )
-    return Iterator(loader, len(dataset), batch_size)
+    return Iterator(loader, len(dataset), batch_size, device=device)
 
 
 def create_bucket_iterator(
@@ -170,6 +106,7 @@ def create_bucket_iterator(
         num_workers=1,
         pin_memory=False,
         drop_last=False,
+        device=None,
         over_sampling_rate=100,
 ):
     batch_transforms = batch_transforms or []
@@ -188,23 +125,17 @@ def create_bucket_iterator(
             bbb.append(batch)
         return bbb
 
-    loader = DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size * over_sampling_rate,
         shuffle=True,
         num_workers=num_workers,
-        collate_fn=lambda x: x,  # raw example list
+        collate_fn=collate,  # raw example list
         pin_memory=pin_memory,
         drop_last=drop_last,
     )
-    iter_loader = IterDataLoader(
-        loader,
-        num_workers=num_workers,
-        collate_fn=collate,  # split example list
-        pin_memory=pin_memory,
-    )
     l = math.ceil(len(dataset) / batch_size)
-    return BucketIterator(iter_loader, l)
+    return BucketIterator(loader, l, device=device)
 
 
 class Iterator:
@@ -226,26 +157,35 @@ class Iterator:
         self.device = device
 
     def __iter__(self):
-        return iter(self.batch_iterator)
+        if self.device is not None:
+            p = to_device(self.device)
+        else:
+            p = lambda a: a
+
+        for batch in self.batch_iterator:
+            batch = p(batch)
+            yield batch
 
     def __len__(self):
         return math.ceil(self.num_example / self.batch_size)
 
 
 class BucketIterator:
-    def __init__(self, batch_generator_iterator, length):
+    def __init__(self, batch_generator_iterator, length, device=None):
         self.batch_generator_iterator = batch_generator_iterator
         self.length = length
+        self.device = device
 
     def __iter__(self):
-        def _generator(iter):
-            for batch_generator in iter:
-                print("b")
-                for batch in batch_generator:
-                    yield batch
-                print("a")
+        if self.device is not None:
+            p = to_device(self.device)
+        else:
+            p = lambda a: a
 
-        return _generator(iter(self.batch_generator_iterator))  # for start background loading
+        for batch_generator in self.batch_generator_iterator:
+            for batch in batch_generator:
+                batch = p(batch)
+                yield batch
 
     def __len__(self):
         return self.length

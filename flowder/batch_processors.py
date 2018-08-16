@@ -1,7 +1,6 @@
 import torch
-from torch.utils.data.dataloader import default_collate
 
-from flowder import default_sequence_collate
+from flowder.iterator import default_sequence_collate
 from torch.nn.utils.rnn import pad_sequence
 
 
@@ -23,19 +22,6 @@ def sort(sort_key):
             return sorted(batch, key=sort_key)
         except KeyError:
             raise KeyError("Failed to sort batch: is sort_key correct?")
-
-    return wrapper
-
-
-def to_device(device):
-    def wrapper(batch):
-        if isinstance(batch, tuple) or isinstance(batch, list):
-            return tuple(wrapper(b) for b in batch)
-        if isinstance(batch, dict):
-            return {key: wrapper(batch[key]) for key in batch}
-        if isinstance(batch, torch.Tensor):
-            return batch.to(device)
-        return batch
 
     return wrapper
 
