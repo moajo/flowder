@@ -240,8 +240,10 @@ class BucketIterator:
     def __iter__(self):
         def _generator(iter):
             for batch_generator in iter:
+                print("b")
                 for batch in batch_generator:
                     yield batch
+                print("a")
 
         return _generator(iter(self.batch_generator_iterator))  # for start background loading
 

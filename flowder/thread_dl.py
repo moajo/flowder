@@ -346,6 +346,7 @@ class _DataLoaderIter(object):
         self.done_event = threading.Event()
 
         self.sample_iter = iter(self.batch_sampler)
+        self.task_for_worker = 4
 
         if self.num_workers > 0:
             self.worker_init_fn = loader.worker_init_fn
@@ -393,7 +394,7 @@ class _DataLoaderIter(object):
             # self.worker_pids_set = True
 
             # prime the prefetch loop
-            for _ in range(2 * self.num_workers):
+            for _ in range(self.task_for_worker * self.num_workers):
                 self._put_indices()
 
     def __len__(self):
@@ -442,7 +443,7 @@ class _DataLoaderIter(object):
         return self
 
     def _put_indices(self):
-        assert self.batches_outstanding < 2 * self.num_workers
+        assert self.batches_outstanding < self.task_for_worker * self.num_workers
         indices = next(self.sample_iter, None)
         if indices is None:
             return
