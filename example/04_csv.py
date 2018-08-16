@@ -2,6 +2,7 @@ import sys, os
 from pathlib import Path
 
 import numpy as np
+from flowder.source.file import ImageSource
 
 from flowder.abstracts import Field
 
@@ -21,7 +22,8 @@ for index, values in iris:
     assert np.issubdtype(type(index), np.integer)
     assert isinstance(values, dict)
 
-d = directory("data/celebA/img_align_celeba")
+images_dir_path = Path("data/celebA/img_align_celeba")
+d = directory(images_dir_path)
 for p in d.item.suffix == ".jpg":
     assert isinstance(p, Path)
 
@@ -30,7 +32,7 @@ for p in d.item.suffix == ".jpg":
 
 anno = file("data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")
 assert len(anno) == 8
-# imgs = collect(anno.item[0], d.item.name, d).to(ImageSource)
+imgs = anno.item[0].map(lambda name: images_dir_path / name).to(ImageSource)
 
-# img = Field("img", process=mean(), postprocess=whitening())
-# ds = imgs.create_datsset()
+img = Field("img", process=mean(), postprocess=whitening())
+ds = imgs.create_datsset()

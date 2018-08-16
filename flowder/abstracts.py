@@ -135,26 +135,10 @@ class SourceBase:
         return len(self.parents) == 0
 
 
-def cache_last_value():
-    def decorator(func):
-        cache = {}
-
-        def wrapper(arg):
-            if arg not in cache:
-                for k in cache.keys():
-                    del cache[k]
-                cache[arg] = func(arg)
-            return cache[arg]
-
-        return wrapper
-
-    return decorator
-
-
 class Field:
     """
     データソースに変換、統計処理を行う
-    複数のFieldを束ねてDatasetにする。
+    複数のFieldを束ねてDatasetにする
     """
 
     def __init__(self, name, target_source, preprocess=None, process=None, loading_process=None):
@@ -165,7 +149,6 @@ class Field:
         :param preprocess: 共通前処理。map。関数のリスト
         :param process: preprocessに続く前処理。Processorのリスト
         :param loading_process: 後処理。map。関数のリスト
-        :param batch_processor:
         """
         assert name is not None
         assert target_source is not None
@@ -182,18 +165,18 @@ class Field:
         v = self.target_source[item]
         return self.calculate_value(v)
 
-    def start_preprocess_data_feed(self):
+    def start_data_feed(self):
         need_data_feed = False
         for p in self.process:
-            if p.start_preprocess_data_feed(self) is not False:
+            if p.start_data_feed(self) is not False:
                 need_data_feed = True
         return need_data_feed
 
-    def finish_preprocess_data_feed(self):
+    def finish_data_feed(self):
         for p in self.process:
-            p.finish_preprocess_data_feed(self)
+            p.finish_data_feed(self)
 
-    def processing_data_feed(self, raw_value):
+    def data_feed(self, raw_value):
         v = raw_value
         for pre in self.preprocess:
             v = pre(v)

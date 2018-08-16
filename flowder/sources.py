@@ -6,6 +6,7 @@ from queue import Queue
 from typing import Iterable
 
 from tqdm import tqdm
+import inspect
 
 from flowder.abstracts import Field, SourceBase
 
@@ -36,8 +37,18 @@ class MapDummy(SourceBase):
         self.transform = transform or (lambda x: x)
         assert isinstance(source, SourceBase)
 
+    def map(self, transform):
+        def merged_transform(item):
+            item = self.transform(item)
+            return transform(item)
+
+        return MapSource(merged_transform, parent=self.source)
+
+    def filter(self, pred):
+        return FilterSource(pred, MapSource(lambda x: self.transform(x), parent=self.source))
+
     def reduce(self):
-        return MapSource(lambda x: self.transform(x), parent=self.source)
+        return MapSource(lambda x: self.transform(x), parent=self.source.reduce())
 
     def __getitem__(self, item):
         return MapDummy(self.source, lambda x: self.transform(x)[item])
@@ -236,7 +247,7 @@ class FilterSource(Source):
         for d in self:
             if item == 0:
                 return d
-            item = -1
+            item -= 1
         raise IndexError("index out of range")
 
     def _iter(self):
@@ -271,7 +282,7 @@ class FileCacheSource(WrapperSource):
 
     """
 
-    def __init__(self, parent, cache_group_name, *cache_args, cache_dir=".tmp",
+    def __init__(self, parent, cache_group_name, *cache_args, cache_dir=".tmp", callee_file_name=None,
                  auto_load=True,
                  show_progress_onload=True):
         """
@@ -297,8 +308,14 @@ class FileCacheSource(WrapperSource):
         self.cache_group_name = cache_group_name
         self.cache_dir = pathlib.Path(cache_dir)
         hs = _calc_args_hash(cache_args)
-        self.cache_file_path = self.cache_dir / (self.cache_group_name + "_" + str(hs))
-        self.cache_length_path = self.cache_dir / (self.cache_group_name + "_" + str(hs) + "_len")
+        if callee_file_name is not None:
+            self.callee_file_name = callee_file_name
+        else:
+            p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
+            self.callee_file_name = p.name[:-len(p.suffix)]
+        cache_base_name = f"flowder.{self.callee_file_name}.{self.cache_group_name}.{str(hs)}"
+        self.cache_file_path = self.cache_dir / cache_base_name
+        self.cache_length_path = self.cache_dir / (cache_base_name + "_len")
 
         if self.cache_length_path.exists():
             with self.cache_length_path.open("rb") as f:
@@ -590,19 +607,19 @@ class Dataset(Source):
         fields = [
             f for f in
             self.fields
-            if f.start_preprocess_data_feed() is not False
+            if f.start_data_feed() is not False
         ]
         if len(fields) == 0:
             print("preprocess is not needed for any fields")
             for f in tqdm(self.fields, desc="preprocess closing"):
-                f.finish_preprocess_data_feed()
+                f.finish_data_feed()
             return
         leaf_iterators = create_cache_iter_tree(fields)
         for i in range(self.size):
             for f, leaf in zip(fields, leaf_iterators):
-                f.processing_data_feed(leaf.next(i))
+                f.data_feed(leaf.next(i))
         for f in tqdm(fields, desc="preprocess closing"):
-            f.finish_preprocess_data_feed()
+            f.finish_data_feed()
 
     def _iter(self):  # TODO preprocess未処理時にエラー?
         if self._memory_cache is not None:
