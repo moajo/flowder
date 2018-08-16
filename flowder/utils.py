@@ -1,4 +1,4 @@
-from flowder.abstracts import Field, SourceBase
+from flowder.abstracts import Field
 from flowder.source.file import TextFileSource, DirectorySource
 from flowder.sources import ZipSource, Dataset
 

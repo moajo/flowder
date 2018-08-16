@@ -1,20 +1,8 @@
 import math
-import queue
-import random
-import threading
-from collections import OrderedDict
-from contextlib import contextmanager
-from copy import deepcopy
 import torch
 import numpy as np
 
 from torch.utils.data.dataloader import default_collate
-
-# from sources import Example
-from tqdm import tqdm
-
-from flowder.dataloader import IterDataLoader
-from flowder.thread_dl import DataLoader
 
 
 def convert_data_to_example(data):
@@ -75,7 +63,7 @@ def create_iterator(
         shuffle,
         batch_transforms=(default_sequence_collate,),
         num_workers=1,
-        pin_memory=False,
+        pin_memory=True,
         drop_last=False,
         device=None,
 ):
@@ -104,7 +92,7 @@ def create_bucket_iterator(
         sort_key,
         batch_transforms=(default_sequence_collate,),
         num_workers=1,
-        pin_memory=False,
+        pin_memory=True,
         drop_last=False,
         device=None,
         over_sampling_rate=100,

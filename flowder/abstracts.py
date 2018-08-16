@@ -64,7 +64,7 @@ class SourceBase:
     def __len__(self):
         if self._size is None:
             if not self.has_length:
-                raise ValueError("source has not length")
+                raise ValueError("This source has not length.(call .calculate_size() or .load() to obtain length,)")
             self._size = self.calculate_size()
         return self._size
 
@@ -84,6 +84,8 @@ class SourceBase:
     def __getitem__(self, item):
         if self.is_loaded:
             return self._data[item]
+        if not self.random_access:
+            raise ValueError("This source is not supporting index access.(you can .load() to enable index access)")
         return self._getitem(item)
 
     def __iter__(self):

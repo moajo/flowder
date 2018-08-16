@@ -118,6 +118,38 @@ class Source(SourceBase):
     def filter(self, pred):
         return FilterSource(pred, self)
 
+    def file_cache(self, cache_group_name, *cache_args, cache_dir=".tmp", caller_file_name=None,
+                   auto_load=True,
+                   show_progress_onload=True):
+        """
+        データのファイルキャッシュを作成します。
+        キャッシュファイルは以下の要素から計算され、すべてが一致するものがキャッシュとして認識されます。
+        - cache_group_name
+        - cache_dir
+        - caller_file_name
+        - cache_argsのハッシュ
+
+        :param cache_group_name: キャッシュの識別子
+        :param cache_args: データが依存するパラメータ
+        :param cache_dir: キャッシュの保存先
+        :param caller_file_name: 呼び出しファイル名。(default: この関数を呼び出したファイル名)
+        :param auto_load: iter時に自動的にload()する
+        :param show_progress_onload: load時に進捗表示をするかどうか
+        :return:
+        """
+        if caller_file_name is None:
+            p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
+            caller_file_name = p.name[:-len(p.suffix)]
+        return FileCacheSource(
+            self,
+            cache_group_name,
+            *cache_args,
+            cache_dir=cache_dir,
+            caller_file_name=caller_file_name,
+            auto_load=auto_load,
+            show_progress_onload=show_progress_onload,
+        )
+
 
 class WrapperSource(Source):
     def __init__(self, parent, has_length=True, random_access=True, auto_load=False, show_progress_onload=False):
@@ -221,8 +253,7 @@ class OnMemorySource(WrapperSource):
 
 class FilterSource(Source):
     """
-    this Source iterate value filterd by pred from parent source
-    note: tqdmにそのまま入れるとlengthの計算を強いられるので注意
+    this Source iterate value filtered by pred from parent source
     """
 
     def __init__(self, pred, parent: Source):
@@ -278,11 +309,10 @@ def _calc_args_hash(args):
 class FileCacheSource(WrapperSource):
     """
     dataをファイルにキャッシュする
-    キャッシュファイル名はcache_group_nameとcache_argsから計算される
-
+    長さ
     """
 
-    def __init__(self, parent, cache_group_name, *cache_args, cache_dir=".tmp", callee_file_name=None,
+    def __init__(self, parent, cache_group_name, *cache_args, cache_dir=".tmp", caller_file_name=None,
                  auto_load=True,
                  show_progress_onload=True):
         """
@@ -308,12 +338,12 @@ class FileCacheSource(WrapperSource):
         self.cache_group_name = cache_group_name
         self.cache_dir = pathlib.Path(cache_dir)
         hs = _calc_args_hash(cache_args)
-        if callee_file_name is not None:
-            self.callee_file_name = callee_file_name
+        if caller_file_name is not None:
+            self.caller_file_name = caller_file_name
         else:
             p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
-            self.callee_file_name = p.name[:-len(p.suffix)]
-        cache_base_name = f"flowder.{self.callee_file_name}.{self.cache_group_name}.{str(hs)}"
+            self.caller_file_name = p.name[:-len(p.suffix)]
+        cache_base_name = f"flowder.{self.caller_file_name}.{self.cache_group_name}.{str(hs)}"
         self.cache_file_path = self.cache_dir / cache_base_name
         self.cache_length_path = self.cache_dir / (cache_base_name + "_len")
 
