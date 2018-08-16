@@ -59,7 +59,7 @@ class SourceBase:
         """override me"""
         if self.is_loaded:
             return False
-        return self.__is_independent()
+        return self._is_independent()
 
     def __len__(self):
         if self._size is None:
@@ -77,11 +77,6 @@ class SourceBase:
         return source_ctor(self)
 
     def calculate_size(self):
-        """
-        ソースの要素数を計算する。
-        要素数が実際イテレーションするまで不明な場合に使う。
-        :return:
-        """
         if self.is_loaded:
             return len(self._data)
         return self._calculate_size()
@@ -97,6 +92,14 @@ class SourceBase:
         if self.auto_load:
             self.load()
         return self._iter()
+
+    def reduce(self):
+        """
+        簡約。２重mapなどを一つにまとめて計算効率を高める。
+        iterationの前に呼んで効率的にすることが目的
+        :return:
+        """
+        return self
 
     def _iter(self):
         raise NotImplementedError()
@@ -119,9 +122,15 @@ class SourceBase:
         raise NotImplementedError()
 
     def _calculate_size(self):
+        """
+        ソースの要素数を計算する。
+        has_length=Trueの場合は最初に__len__が呼ばれたときに呼ばれる
+        それ以外の場合は明示的に呼ぶ
+        :return:
+        """
         raise NotImplementedError()
 
-    def __is_independent(self):
+    def _is_independent(self):
         """override me"""
         return len(self.parents) == 0
 
@@ -160,9 +169,10 @@ class Field:
         """
         assert name is not None
         assert target_source is not None
+        assert isinstance(target_source, SourceBase)
 
         self.name = name
-        self.target_source = target_source
+        self.target_source = target_source.reduce()
 
         self.preprocess = preprocess or []
         self.process = process or []

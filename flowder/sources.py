@@ -25,27 +25,48 @@ def cache_value(cache_arg_index=0):
     return decorator
 
 
-class MapDummy:  # TODO equalsを実装してfilterに
+class MapDummy(SourceBase):
     """
     to make map source easily
     """
 
-    def __init__(self, source, root):
+    def __init__(self, source, transform=None):
+        super().__init__(source)
         self.source = source
-        self.root = root
+        self.transform = transform or (lambda x: x)
         assert isinstance(source, SourceBase)
-        assert not isinstance(root, MapDummy)
+
+    def reduce(self):
+        return MapSource(lambda x: self.transform(x), parent=self.source)
 
     def __getitem__(self, item):
-        return MapSource(lambda x: x[item], parent=self.source)
+        return MapDummy(self.source, lambda x: self.transform(x)[item])
+        # return MapSource(lambda x: x[item], parent=self.source)
 
     def __getattr__(self, item):
-        return MapSource(lambda x: getattr(x, item), parent=self.source)
+        return MapDummy(self.source, lambda x: getattr(self.transform(x), item))
+        # return MapSource(lambda x: getattr(x, item), parent=self.source)
 
     def __iter__(self):
-        return iter(self.source)
+        return iter(self.reduce())
 
-    # def __eq__(self, other):
+    def __eq__(self, other):  # ==
+        return FilterSource(lambda x: self.transform(x) == other, self.source)
+
+    def __lt__(self, other):  # <
+        return FilterSource(lambda x: self.transform(x) < other, self.source)
+
+    def __le__(self, other):  # <=
+        return FilterSource(lambda x: self.transform(x) <= other, self.source)
+
+    def __gt__(self, other):  # >
+        return FilterSource(lambda x: self.transform(x) > other, self.source)
+
+    def __ge__(self, other):  # >=
+        return FilterSource(lambda x: self.transform(x) >= other, self.source)
+
+    def __ne__(self, other):  # !=
+        return FilterSource(lambda x: self.transform(x) != other, self.source)
 
 
 class Source(SourceBase):
@@ -78,7 +99,7 @@ class Source(SourceBase):
         # mapped = MapSource(lambda x:x.hoge, source)
         :return:
         """
-        return MapDummy(self, self)
+        return MapDummy(self)
 
     def map(self, transform):
         return MapSource(transform, self)
@@ -522,6 +543,8 @@ def create_example(field_names, vs, return_as_tuple=True):
 
 
 class Dataset(Source):
+    # TODO important: iterを呼ばないので、データローダがイテレーションを開始しても、
+    # ソースチェーン上のauto_loadなソースがロードされない。 (independentなやつしかiterされないから)
     """
     fieldsとsetをつなぐSource
     複数のFieldからのデータイテレーションを最適化する
@@ -553,7 +576,7 @@ class Dataset(Source):
 
     @property
     def item(self):
-        return MapDummy(self, self)
+        return MapDummy(self)
 
     def is_independent(self):
         return True
