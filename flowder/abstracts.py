@@ -144,6 +144,15 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
         """override me"""
         return len(self.parents) == 0
 
+    # def source_hash(self):
+    #     hs = self._source_hash()
+    #     for p in self.parents:
+    #         hs = (hs * 31 + p.source_hash()) % sys.maxsize
+    #     return hs
+    #
+    # def _source_hash(self):
+    #     return 0
+
 
 class Field:
     """
