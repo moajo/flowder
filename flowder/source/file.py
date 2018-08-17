@@ -6,6 +6,31 @@ import pandas as pd
 from PIL import Image
 
 
+class SlicedStrSource(Source):
+    def __init__(self, path, sliced_index):
+        super(SlicedStrSource, self).__init__()
+        self.path = pathlib.Path(path)
+        self.sliced_index = sliced_index
+        assert self.path.exists()
+
+    def split(self, delimiter=" "):
+        return MapSource(lambda x: x.split(delimiter), self)
+
+    def _calculate_size(self):
+        return len(self.sliced_index)
+
+    def _getitem(self, item):
+        if type(item) is int:
+            return linecache.getline(str(self.path), item + 1)[:-1]
+        else:
+            sliced_index = self.sliced_index[item]
+            return SlicedStrSource(self.path, sliced_index)
+
+    def _iter(self):
+        for i in self.sliced_index:
+            yield self[i]
+
+
 class StrSource(Source):
     """
     特定ファイルの各行を返すソース
@@ -24,8 +49,11 @@ class StrSource(Source):
             return sum(1 for _ in f)
 
     def _getitem(self, item):
-        assert type(item) is int
-        return linecache.getline(str(self.path), item + 1)[:-1]
+        if type(item) is int:
+            return linecache.getline(str(self.path), item + 1)[:-1]
+        else:
+            sliced_index = list(range(len(self)))[item]
+            return SlicedStrSource(self.path, sliced_index)
 
     def _iter(self):
         with self.path.open(encoding="utf-8") as f:

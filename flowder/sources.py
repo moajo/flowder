@@ -634,15 +634,15 @@ class Dataset(Source):
             if f.start_data_feed() is not False
         ]
         if len(fields) == 0:
-            print("preprocess is not needed for any fields")
-            for f in tqdm(self.fields, desc="preprocess closing"):
+            print("[flowder.Dataset]preprocess is not needed for any fields")
+            for f in tqdm(self.fields, desc="[flowder.Dataset]preprocess closing"):
                 f.finish_data_feed()
             return
         leaf_iterators = create_cache_iter_tree(fields)
-        for i in range(self.size):
+        for i in tqdm(range(self.size), desc=f"[flowder.Dataset]preprocessing {len(fields)} fields"):
             for f, leaf in zip(fields, leaf_iterators):
                 f.data_feed(leaf.next(i))
-        for f in tqdm(fields, desc="preprocess closing"):
+        for f in tqdm(fields, desc="[flowder.Dataset]preprocess closing"):
             f.finish_data_feed()
 
     def _iter(self):  # TODO preprocess未処理時にエラー?
