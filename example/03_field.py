@@ -21,10 +21,10 @@ for data in zipped:
 
 f1 = TextField("ja", ja)
 f2 = TextField("en", en, numericalize=False)
-datsset = create_dataset(len(ja), f1, f2)
+dataset = create_dataset(len(ja), f1, f2)
 
-datsset.preprocess()
-for example in datsset:
+dataset.preprocess()
+for example in dataset:
     assert isinstance(example, dict)
     assert "ja" in example
     value = example["ja"]

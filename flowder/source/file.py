@@ -60,6 +60,9 @@ class StrSource(Source):
             for line in f:
                 yield line[:-1]
 
+    def _str(self):
+        return super(StrSource, self)._str() + f"({self.path})"
+
 
 class TextFileSource(Source):
     """

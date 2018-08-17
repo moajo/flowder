@@ -18,13 +18,13 @@ for spl in lines.split():
     assert isinstance(spl[0], str)
     break
 
-datsset = lines.create()
-for example in datsset:
+dataset = lines.create()
+for example in dataset:
     assert isinstance(example, dict), "as default, Dataset iterate dict instance"
     assert "raw" in example, "as default, example key is 'raw'. because fields is not given on create()"
 
-datsset = lines.create(return_as_tuple=True)
-for example in datsset:
+dataset = lines.create(return_as_tuple=True)
+for example in dataset:
     assert isinstance(example, str), "if return_as_tuple=True on create, should iterate raw value"
 
 delimiter = "|||"

@@ -614,6 +614,7 @@ class Dataset(Source):
         self.fields = list(fields)
         self.size = size
         self._return_as_tuple = return_as_tuple
+        assert len(self.fields)>0
 
     @property
     def item(self):
@@ -665,3 +666,33 @@ class Dataset(Source):
 
     def _calculate_size(self):
         return self.size
+
+    def _str(self):
+        parents = [
+            (str(field.target_source)+f">>({field.name})").split("\n")
+            for field in self.fields
+        ]
+        if len(parents) == 1:
+            p = parents[0]
+            p[-1] += "-" + "[Dataset]"
+            return "\n".join(p)
+        max_width = max(len(p_lines[0]) for p_lines in parents)
+        pads = [
+            [
+                (" " * (max_width - len(line))) + line
+                for line in p_lines
+            ]
+            for p_lines in parents
+        ]
+        p_line_counts = [len(it) for it in pads]
+
+        tails = ["┐"]
+        for pl in p_line_counts:
+            for _ in range(pl - 1):
+                tails.append("│")
+            tails.append("┤")
+        tails = tails[:-2]
+        tails.append("┴" + "[Dataset]")
+        lines = [line for p_lines in pads for line in p_lines]
+        res = [line + tail for line, tail in zip(lines, tails)]
+        return "\n".join(res)

@@ -8,7 +8,6 @@ ja = file("data/kftt.ja").lines()
 en = file("data/kftt.en").lines()
 
 zipped = zip_source(ja, en)
-
 assert len(zipped) == len(ja)
 
 for data in zipped:
@@ -21,15 +20,15 @@ for data in zipped:
 
 f1 = Field("ja", ja)
 f2 = Field("en", en)
-datsset = create_dataset(len(ja), f1, f2)
-for example in datsset:
+dataset = create_dataset(len(ja), f1, f2)
+for example in dataset:
     assert isinstance(example, dict)
     assert "ja" in example
     assert isinstance(example["ja"], str)
     assert isinstance(example["en"], str)
 
-datsset = create_dataset(len(ja), f1, f2, return_as_tuple=True)
-for example in datsset:
+dataset = create_dataset(len(ja), f1, f2, return_as_tuple=True)
+for example in dataset:
     assert isinstance(example, tuple) and len(example) == 2
     j, e = example
     assert isinstance(j, str)

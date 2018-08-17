@@ -54,9 +54,9 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
             if show_progress:
                 if d.has_length:
                     l = len(d)
-                    d = tqdm(d._iter(), total=l, desc="[MemoryCacheSource]loading...")
+                    d = tqdm(d._iter(), total=l, desc="[flowder.Source]loading...")
                 else:
-                    d = tqdm(d._iter(), desc="[MemoryCacheSource]loading...")
+                    d = tqdm(d._iter(), desc="[flowder.Source]loading...")
             self._data = list(d)
             self.has_length = True
             self.random_access = True
@@ -143,6 +143,43 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
     def _is_independent(self):
         """override me"""
         return len(self.parents) == 0
+
+    def _str(self):
+        return self.__class__.__name__
+
+    def __str__(self):
+        """
+        a-b(hoge)┐
+                c┴d
+        :return:
+        """
+        if len(self.parents) == 0:
+            return self._str()
+        parents = [str(p).split("\n") for p in self.parents]
+        if len(parents) == 1:
+            p = parents[0]
+            p[-1] += "-" + self._str()
+            return "\n".join(p)
+        max_width = max(len(p_lines[0]) for p_lines in parents)
+        pads = [
+            [
+                (" " * (max_width - len(line))) + line
+                for line in p_lines
+            ]
+            for p_lines in parents
+        ]
+        p_line_counts = [len(it) for it in pads]
+
+        tails = ["┐"]
+        for pl in p_line_counts:
+            for _ in range(pl - 1):
+                tails.append("│")
+            tails.append("┤")
+        tails = tails[:-2]
+        tails.append("┴" + self._str())
+        lines = [line for p_lines in pads for line in p_lines]
+        res = [line + tail for line, tail in zip(lines, tails)]
+        return "\n".join(res)
 
 
 class Field:
