@@ -343,9 +343,9 @@ class FileCacheSource(WrapperSource):
         else:
             p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
             self.caller_file_name = p.name[:-len(p.suffix)]
-        cache_base_name = f"flowder.{self.caller_file_name}.{self.cache_group_name}.{str(hs)}"
-        self.cache_file_path = self.cache_dir / cache_base_name
-        self.cache_length_path = self.cache_dir / (cache_base_name + "_len")
+        self.cache_base_name = f"flowder.{self.caller_file_name}.{self.cache_group_name}.{str(hs)}"
+        self.cache_file_path = self.cache_dir / self.cache_base_name
+        self.cache_length_path = self.cache_dir / (self.cache_base_name + "_len")
 
         if self.cache_length_path.exists():
             with self.cache_length_path.open("rb") as f:
@@ -360,7 +360,7 @@ class FileCacheSource(WrapperSource):
         :return:
         """
         if remove_all:
-            for p in self.cache_dir.glob(f"{self.cache_group_name}_*"):
+            for p in self.cache_dir.glob(f"flowder.{self.caller_file_name}.{self.cache_group_name}*"):
                 p.unlink()
         else:
             if self.cache_file_path.exists():
