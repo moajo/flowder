@@ -34,6 +34,7 @@ class TextField(Field):
             vocab_processor=BuildVocab(),
             sos_token=None,
             eos_token=None,
+            numericalize=True,
     ):
         preprocess = []
         if tokenize:
@@ -53,6 +54,11 @@ class TextField(Field):
         if sos_token is not None:
             loading_process.append(
                 _add_sos(sos_token)
+            )
+        if numericalize:
+            assert vocab_processor is not None
+            loading_process.append(
+                vocab_processor.numericalize
             )
 
         super(TextField, self).__init__(

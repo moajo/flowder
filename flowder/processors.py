@@ -52,7 +52,7 @@ class BuildVocab(AggregateProcessor):
                  additional_special_token=None,
                  cache_file=None,
                  vocab=None,
-                 numericalize=True,
+                 auto_numericalize=False,
                  **kwargs
                  ):
         """
@@ -80,7 +80,7 @@ class BuildVocab(AggregateProcessor):
         self.pad_token = pad_token
         self.additional_special_token = additional_special_token
         self.cache_file = Path(cache_file) if cache_file is not None else None
-        self.numericalize = numericalize
+        self.auto_numericalize = auto_numericalize
 
         self.vocab = vocab
         self.word_counter = Counter()
@@ -103,9 +103,12 @@ class BuildVocab(AggregateProcessor):
     def finish_data_feed(self, field):
         self.build_vocab()
 
+    def numericalize(self, tokenized_sentence):
+        return [self.vocab.stoi[word] for word in tokenized_sentence]
+
     def __call__(self, tokenized_sentence):
-        if self.numericalize:
-            return [self.vocab.stoi[word] for word in tokenized_sentence]
+        if self.auto_numericalize:
+            return self.numericalize(tokenized_sentence)
         return tokenized_sentence
 
     def build_vocab(self):

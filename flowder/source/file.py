@@ -25,7 +25,7 @@ class StrSource(Source):
 
     def _getitem(self, item):
         assert type(item) is int
-        return linecache.getline(str(self.path), item + 1)
+        return linecache.getline(str(self.path), item + 1)[:-1]
 
     def _iter(self):
         with self.path.open(encoding="utf-8") as f:

@@ -191,13 +191,15 @@ class Field:
         for pre in self.preprocess:
             v = pre(v)
         for ld in self.process:
-            ld(v)
+            ld.data_feed(v)
 
     def calculate_value(self, raw_value):
 
         v = raw_value
         for pre in self.preprocess:
             v = pre(v)
+        for ld in self.process:
+            v = ld(v)
         for ld in self.loading_process:
             v = ld(v)
         return v

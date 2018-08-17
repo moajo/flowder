@@ -614,12 +614,6 @@ class Dataset(Source):
         self.fields = list(fields)
         self.size = size
         self._return_as_tuple = return_as_tuple
-        self._memory_cache = None  # TODO deprecate
-
-    def load_to_memory(self):
-        if self._memory_cache is not None:
-            return
-        self._memory_cache = list(tqdm(self, desc="loading to memory..."))
 
     @property
     def item(self):
@@ -652,8 +646,6 @@ class Dataset(Source):
             f.finish_data_feed()
 
     def _iter(self):  # TODO preprocess未処理時にエラー?
-        if self._memory_cache is not None:
-            return iter(self._memory_cache)
         leaf_iterators = create_cache_iter_tree(self.fields)
         for i in range(self.size):
             vs = [
@@ -663,8 +655,6 @@ class Dataset(Source):
             yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
 
     def _getitem(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
-        if self._memory_cache is not None:
-            return self._memory_cache[item]
         # leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
         # vs = [
         #     f.calculate_value(leaf[item])  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
