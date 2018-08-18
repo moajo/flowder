@@ -21,13 +21,13 @@ class SlicedStrSource(Source):
 
     def _getitem(self, item):
         if type(item) is int:
-            return linecache.getline(str(self.path), item + 1)[:-1]
+            return linecache.getline(str(self.path), self.sliced_index[item] + 1)[:-1]
         else:
             sliced_index = self.sliced_index[item]
             return SlicedStrSource(self.path, sliced_index)
 
     def _iter(self):
-        for i in self.sliced_index:
+        for i in range(len(self.sliced_index)):
             yield self[i]
 
 
