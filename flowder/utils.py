@@ -1,6 +1,6 @@
-from flowder.abstracts import Field
-from flowder.source.file import TextFileSource, DirectorySource
-from flowder.sources import ZipSource, Dataset
+from .abstracts import Field
+from .source.file import TextFileSource, DirectorySource
+from .source.base import ZipSource, Dataset
 
 
 def file(path):
@@ -23,7 +23,6 @@ def create_dataset(size, *fields, return_as_tuple=False):
         size,
         return_as_tuple=return_as_tuple
     )
-
 
 # def collect(base_source: SourceBase, target_key_source: SourceBase, target_source: SourceBase):
 #     """

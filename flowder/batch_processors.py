@@ -1,6 +1,6 @@
 import torch
 
-from flowder.iterator import default_sequence_collate
+from .iterator import default_sequence_collate
 from torch.nn.utils.rnn import pad_sequence
 
 

@@ -8,7 +8,7 @@ from typing import Iterable
 from tqdm import tqdm
 import inspect
 
-from flowder.abstracts import Field, SourceBase
+from ..abstracts import Field, SourceBase
 
 
 def cache_value(cache_arg_index=0):
@@ -232,26 +232,7 @@ class ZipSource(Source):
         return zip(*self.parents)
 
 
-class OnMemorySource(WrapperSource):
-    """
-    メモリに乗せる。
-    はじめてのアクセスで自動的にロード
-    """
-
-    def __init__(self, parent, load_immediately=False, auto_load=True, show_progress_onload=True):
-        super(OnMemorySource, self).__init__(
-            parent,
-            has_length=parent.has_length,
-            random_access=parent.random_access,
-            auto_load=auto_load,
-            show_progress_onload=show_progress_onload
-
-        )
-        if load_immediately:
-            self.load()
-
-
-class FilterSource(Source):
+class FilterSource(Source):  # TODO random access用のindex tableを事前計算する機能
     """
     this Source iterate value filtered by pred from parent source
     """
@@ -564,14 +545,6 @@ def create_cache_iter_tree(fields):
     return leafs
 
 
-# class Example:
-#     def __init__(self, data_dict):
-#         self._keys = []
-#         for name, v in data_dict.items():
-#             setattr(self, name, v)
-#             self._keys.append(name)
-
-
 def create_example(field_names, vs, return_as_tuple=True):
     """
 
@@ -585,7 +558,6 @@ def create_example(field_names, vs, return_as_tuple=True):
         if len(vs) == 1:
             return vs[0]
         return tuple(vs)
-    # return Example(OrderedDict(zip(field_names, vs)))
     return {k: v for k, v in zip(field_names, vs)}
 
 
@@ -614,7 +586,7 @@ class Dataset(Source):
         self.fields = list(fields)
         self.size = size
         self._return_as_tuple = return_as_tuple
-        assert len(self.fields)>0
+        assert len(self.fields) > 0
 
     @property
     def item(self):
@@ -669,7 +641,7 @@ class Dataset(Source):
 
     def _str(self):
         parents = [
-            (str(field.target_source)+f">>({field.name})").split("\n")
+            (str(field.target_source) + f">>({field.name})").split("\n")
             for field in self.fields
         ]
         if len(parents) == 1:

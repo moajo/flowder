@@ -1,5 +1,5 @@
-from flowder.abstracts import Field
-from flowder.processors import BuildVocab
+from .abstracts import Field
+from .processors import BuildVocab
 
 
 def _lowercase(tokenized):

@@ -5,17 +5,6 @@ import numpy as np
 from torch.utils.data.dataloader import default_collate
 
 
-def convert_data_to_example(data):
-    """
-
-    :param data: tuple,dict or Example
-    :return:
-    """
-    if isinstance(data, tuple):
-        data = {f"attr{n}": v for n, v in enumerate(data)}
-    return data
-
-
 def to_device(device):
     def wrapper(batch):
         if isinstance(batch, tuple) or isinstance(batch, list):

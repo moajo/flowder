@@ -1,5 +1,3 @@
-import sys
-
 from tqdm import tqdm
 
 
@@ -30,9 +28,9 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
         """
         assert type(parents) is tuple
         self.random_access = random_access
-        self.has_length = has_length  # 長さは計算可能かわからない。
+        self.has_length = has_length
         self.parents: [SourceBase] = list(parents) or []
-        self._size = None  # 長さのキャッシュ
+        self._size = None
         self._data = None
         self.auto_load = auto_load
         self.show_progress_onload = show_progress_onload
@@ -111,7 +109,46 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
         """
         return self
 
+    def __str__(self):
+        """
+        a-b(hoge)┐
+                c┴d
+        :return:
+        """
+        if len(self.parents) == 0:
+            return self._str()
+        parents = [str(p).split("\n") for p in self.parents]
+        if len(parents) == 1:
+            p = parents[0]
+            p[-1] += "-" + self._str()
+            return "\n".join(p)
+        max_width = max(len(p_lines[0]) for p_lines in parents)
+        pads = [
+            [
+                (" " * (max_width - len(line))) + line
+                for line in p_lines
+            ]
+            for p_lines in parents
+        ]
+        p_line_counts = [len(it) for it in pads]
+
+        tails = ["┐"]
+        for pl in p_line_counts:
+            for _ in range(pl - 1):
+                tails.append("│")
+            tails.append("┤")
+        tails = tails[:-2]
+        tails.append("┴" + self._str())
+        lines = [line for p_lines in pads for line in p_lines]
+        res = [line + tail for line, tail in zip(lines, tails)]
+        return "\n".join(res)
+
+    """
+    ---------ABSTRACT FUNCTIONS---------
+    """
+
     def _iter(self):
+        """override me"""
         raise NotImplementedError()
 
     def _getitem(self, item):
@@ -146,40 +183,6 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
 
     def _str(self):
         return self.__class__.__name__
-
-    def __str__(self):
-        """
-        a-b(hoge)┐
-                c┴d
-        :return:
-        """
-        if len(self.parents) == 0:
-            return self._str()
-        parents = [str(p).split("\n") for p in self.parents]
-        if len(parents) == 1:
-            p = parents[0]
-            p[-1] += "-" + self._str()
-            return "\n".join(p)
-        max_width = max(len(p_lines[0]) for p_lines in parents)
-        pads = [
-            [
-                (" " * (max_width - len(line))) + line
-                for line in p_lines
-            ]
-            for p_lines in parents
-        ]
-        p_line_counts = [len(it) for it in pads]
-
-        tails = ["┐"]
-        for pl in p_line_counts:
-            for _ in range(pl - 1):
-                tails.append("│")
-            tails.append("┤")
-        tails = tails[:-2]
-        tails.append("┴" + self._str())
-        lines = [line for p_lines in pads for line in p_lines]
-        res = [line + tail for line, tail in zip(lines, tails)]
-        return "\n".join(res)
 
 
 class Field:

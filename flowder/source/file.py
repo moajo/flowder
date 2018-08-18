@@ -1,9 +1,7 @@
 import linecache
-
-from flowder import Source, MapSource, SourceBase
+from ..abstracts import SourceBase
+from ..source.base import Source, MapSource
 import pathlib
-import pandas as pd
-from PIL import Image
 
 
 class SlicedStrSource(Source):
@@ -94,6 +92,7 @@ class TextFileSource(Source):
 
 class CSVSource(Source):
     def __init__(self, path_or_buffer, **kwargs):
+        import pandas as pd
         super(CSVSource, self).__init__()
         self.data_frame = pd.read_csv(path_or_buffer, **kwargs)
 
@@ -144,30 +143,20 @@ class DirectorySource(Source):
         return self.path.iterdir()
 
 
-class ArraySource(Source):
-    def __init__(self, contents):
-        super(ArraySource, self).__init__()
-        self.contents = contents
-
-    def _calculate_size(self):
-        return len(self.contents)
-
-    def _getitem(self, item):
-        return self.contents[item]
-
-    def _iter(self):
-        return iter(self.contents)
-
-
 class ImageSource(Source):
+    Image = None
+
     def __init__(self, path_source: SourceBase):
         super(ImageSource, self).__init__(path_source)
+        if self.Image is None:
+            from PIL import Image
+            self.Image = Image
 
     def calculate_size(self):
         return len(self.parent)
 
     def _calculate_value(self, path):
-        yield Image.open(path)
+        yield self.Image.open(path)
 
     def _getitem(self, item):
         p = self.parent[item]
@@ -176,7 +165,7 @@ class ImageSource(Source):
                 p = pathlib.Path(p)
 
             assert isinstance(p, pathlib.Path)
-            return Image.open(p)
+            return self.Image.open(p)
         else:
             ps = p
             ps = [
@@ -185,8 +174,8 @@ class ImageSource(Source):
             ]
             assert all(isinstance(p, pathlib.Path) for p in ps)
 
-            return [Image.open(p) for p in ps]
+            return [self.Image.open(p) for p in ps]
 
     def _iter(self):
         for p in self.parent:
-            yield Image.open(p)
+            yield self.Image.open(p)

@@ -1,14 +1,7 @@
-import sys, os
 from pathlib import Path
-
 import numpy as np
-from flowder.source.file import ImageSource
-
-from flowder.abstracts import Field
-
-sys.path.append(os.pardir)
-from flowder.fields import TextField
-from flowder.utils import file, directory
+from flowder.source import ImageSource
+from flowder import file, directory
 
 iris = file("data/IRIS.csv").csv(header=None)
 
@@ -35,4 +28,4 @@ assert len(anno) == 8
 imgs = anno.item[0].map(lambda name: images_dir_path / name).to(ImageSource)
 
 # img = Field("img", process=mean(), postprocess=whitening())
-ds = imgs.create_datsset()
+ds = imgs.create()

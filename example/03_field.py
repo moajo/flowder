@@ -1,8 +1,5 @@
-import sys, os
-
-sys.path.append(os.pardir)
 from flowder.fields import TextField
-from flowder.utils import zip_source, file, create_dataset
+from flowder import zip_source, file, create_dataset
 
 ja = file("data/kftt.ja").lines()
 en = file("data/kftt.en").lines()

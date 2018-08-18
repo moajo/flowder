@@ -1,6 +1,3 @@
-import sys, os
-
-sys.path.append(os.pardir)
 from flowder.utils import zip_source, file, create_dataset
 from flowder.abstracts import Field
 
