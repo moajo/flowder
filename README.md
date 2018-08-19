@@ -1,5 +1,18 @@
 # flowder
-simple dataloader for machine learning.
+simple (fast) dataloader for machine learning.
+
+# installation
+
+```sh
+pip install git+https://github.com/moajo/flowder.git
+```
+
+### require
+- Python 3.6
+- tqdm
+- pytorch(optional)
+- pandas(optional)
+- PIL(optional)
 
 # example
 ```python
@@ -23,7 +36,8 @@ image_source = directory("imgs").filter(lambda x: x[-4:]==".png").image()
 first_img = image_source[0]
 ```
 
-# Source
+# DataModel
+## Source
 Sourceは反復可能なオブジェクトで、map/filterなどの演算によって連鎖します。
 これらの計算はすべて遅延評価され、必要な部分のみがメモリ上に読み込まれます。
 ```python
@@ -37,7 +51,7 @@ file_cache = source.file_cache("processed_data")
 for data in file_cache:
   pass # 2回目の実行以降は、キャッシュの値が使用されます
 ```
-# Field
+## Field
 対象となるSourceを指定し、値全体の統計量を計算するような前処理や、それを使ったデータの変換を管理します。
 Fieldオブジェクトはデータ項目ごとに用意され、マージして後述するDatasetオブジェクトを作成します。
 TextFieldはテキスト用のFieldのプリセットで、語彙生成とキャッシュ、sos/eosの挿入とindex化ができます。
@@ -63,14 +77,14 @@ trg = TextField("trg",
                 vocab_processor=ja_vocab_processor)
 ```
 
-# Dataset
+## Dataset
 Datasetは複数のFieldを束ね、Sourceの依存グラフをもとに計算を最適化します。
 ```python
 ds = create_dataset(len(train_en_loader), src, trg)
 ds.preprocess()# Fieldの前処理の実行
 # ds.map(func).filter(pred) # DatasetはSourceでもあります
 ```
-# Iterator
+## Iterator
 マルチプロセスで非同期にデータをロードするイテレータを提供します。
 バッチの作成や前処理を別プロセスで行うので、メインプロセスのイテレーションが高速化します。
 また、開始時にデータをまとめてロードする必要がなくなります。
@@ -96,6 +110,45 @@ test_iter = flowder.create_iterator(
     batch_transforms=batch_transforms,
     device=device,
 )
+```
+
+# benchmark
+前処理：テキストをトークナイズしてwordIndexに変換、<sos>/<eos>の挿入、バッチ内のデータの長さをできるだけ揃えて(BucketIterator)ソートしてpadding
+Vocabは事前に作成済み
+flowderは事前読み込みなしで学習中に非同期でデータ生成
+torchtextは途中まで前処理済みデータをpickleでキャッシュして、学習前にロードする
+学習タスクは比較の安定性のため、疑似タスクとしてバッチ毎に`time.sleep(0.01)`している
+
+### flowder
+```
+[flowder.Dataset]preprocess is not needed for any fields
+train epoch:1: 100%|███████████████████████████████████████████| 2222/2222 [00:24<00:00, 90.34it/s]
+TEST[epoch:1]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 61.55it/s]
+train epoch:2: 100%|███████████████████████████████████████████| 2222/2222 [00:23<00:00, 95.34it/s]
+TEST[epoch:2]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 67.35it/s]
+train epoch:3: 100%|███████████████████████████████████████████| 2222/2222 [00:23<00:00, 95.49it/s]
+TEST[epoch:3]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 65.16it/s]
+train epoch:4: 100%|███████████████████████████████████████████| 2222/2222 [00:23<00:00, 95.83it/s]
+TEST[epoch:4]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 66.54it/s]
+train epoch:5: 100%|███████████████████████████████████████████| 2222/2222 [00:23<00:00, 95.42it/s]
+TEST[epoch:5]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 65.87it/s]
+iteration-time: 118.43958020210266
+88.32s user 10.04s system 76% cpu 2:08.31 total
+```
+### torchtext
+```
+train epoch:1: 100%|███████████████████████████████████████████| 2222/2222 [00:31<00:00, 70.99it/s]
+TEST[epoch:1]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 65.46it/s]
+train epoch:2: 100%|███████████████████████████████████████████| 2222/2222 [00:30<00:00, 71.77it/s]
+TEST[epoch:2]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 67.12it/s]
+train epoch:3: 100%|███████████████████████████████████████████| 2222/2222 [00:30<00:00, 71.78it/s]
+TEST[epoch:3]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 66.63it/s]
+train epoch:4: 100%|███████████████████████████████████████████| 2222/2222 [00:30<00:00, 71.81it/s]
+TEST[epoch:4]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 67.25it/s]
+train epoch:5: 100%|███████████████████████████████████████████| 2222/2222 [00:30<00:00, 71.94it/s]
+TEST[epoch:5]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 68.14it/s]
+iteration-time: 155.81213545799255s
+51.78s user 1.74s system 32% cpu 2:46.48 total
 ```
 
 # more example
