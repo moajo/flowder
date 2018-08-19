@@ -117,6 +117,7 @@ test_iter = flowder.create_iterator(
 Vocabは事前に作成済み
 flowderは事前読み込みなしで学習中に非同期でデータ生成
 torchtextは途中まで前処理済みデータをpickleでキャッシュして、学習前にロードする
+学習タスクは比較の安定性のため、疑似タスクとしてバッチ毎に`time.sleep(0.01)`している
 
 ### flowder
 ```
