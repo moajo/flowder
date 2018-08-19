@@ -64,7 +64,7 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
     def is_independent(self):
         """override me"""
         if self.is_loaded:
-            return False
+            return True
         return self._is_independent()
 
     def __len__(self):
