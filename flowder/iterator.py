@@ -120,7 +120,9 @@ class Iterator:
                  batch_iterator,
                  num_example,
                  batch_size,
-                 device=None):
+                 device=None,
+                 prefetch_next_iterator=True,
+                 ):
         """
 
         :param batch_iterator:
@@ -133,36 +135,66 @@ class Iterator:
         self.batch_size = batch_size
         self.device = device
 
-    def __iter__(self):
+        # prefetch iterator(start background loading process)
+        self._next_iter = self._iter() if prefetch_next_iterator else None
+
+    def _iter(self):
         if self.device is not None:
             p = to_device(self.device)
         else:
             p = lambda a: a
 
-        for batch in self.batch_iterator:
-            batch = p(batch)
-            yield batch
+        batch_iterator_iter = iter(self.batch_iterator)
+
+        def _wrapper():
+            for batch in batch_iterator_iter:
+                batch = p(batch)
+                yield batch
+
+        return _wrapper()
+
+    def __iter__(self):
+        if self._next_iter is not None:
+            ret = self._next_iter
+            self._next_iter = self._iter()
+            return ret
+        return self._iter()
 
     def __len__(self):
         return math.ceil(self.num_example / self.batch_size)
 
 
 class BucketIterator:
-    def __init__(self, batch_generator_iterator, length, device=None):
+    def __init__(self, batch_generator_iterator, length, device=None, prefetch_next_iterator=True):
         self.batch_generator_iterator = batch_generator_iterator
         self.length = length
         self.device = device
 
-    def __iter__(self):
+        # prefetch iterator(start background loading process)
+        self._next_iter = self._iter() if prefetch_next_iterator else None
+
+    def _iter(self):
         if self.device is not None:
             p = to_device(self.device)
         else:
             p = lambda a: a
 
-        for batch_generator in self.batch_generator_iterator:
-            for batch in batch_generator:
-                batch = p(batch)
-                yield batch
+        batch_generator_iterator_iter = iter(self.batch_generator_iterator)
+
+        def _wrapper():
+            for batch_generator in batch_generator_iterator_iter:
+                for batch in batch_generator:
+                    batch = p(batch)
+                    yield batch
+
+        return _wrapper()
+
+    def __iter__(self):
+        if self._next_iter is not None:
+            ret = self._next_iter
+            self._next_iter = self._iter()
+            return ret
+        return self._iter()
 
     def __len__(self):
         return self.length
