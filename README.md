@@ -1,5 +1,18 @@
 # flowder
-simple dataloader for machine learning.
+simple (fast) dataloader for machine learning.
+
+# installation
+
+```sh
+pip install git+https://github.com/moajo/flowder.git
+```
+
+### require
+- Python 3.6
+- tqdm
+- pytorch(optional)
+- pandas(optional)
+- PIL(optional)
 
 # example
 ```python
@@ -23,7 +36,8 @@ image_source = directory("imgs").filter(lambda x: x[-4:]==".png").image()
 first_img = image_source[0]
 ```
 
-# Source
+# DataModel
+## Source
 Sourceは反復可能なオブジェクトで、map/filterなどの演算によって連鎖します。
 これらの計算はすべて遅延評価され、必要な部分のみがメモリ上に読み込まれます。
 ```python
@@ -37,7 +51,7 @@ file_cache = source.file_cache("processed_data")
 for data in file_cache:
   pass # 2回目の実行以降は、キャッシュの値が使用されます
 ```
-# Field
+## Field
 対象となるSourceを指定し、値全体の統計量を計算するような前処理や、それを使ったデータの変換を管理します。
 Fieldオブジェクトはデータ項目ごとに用意され、マージして後述するDatasetオブジェクトを作成します。
 TextFieldはテキスト用のFieldのプリセットで、語彙生成とキャッシュ、sos/eosの挿入とindex化ができます。
@@ -63,14 +77,14 @@ trg = TextField("trg",
                 vocab_processor=ja_vocab_processor)
 ```
 
-# Dataset
+## Dataset
 Datasetは複数のFieldを束ね、Sourceの依存グラフをもとに計算を最適化します。
 ```python
 ds = create_dataset(len(train_en_loader), src, trg)
 ds.preprocess()# Fieldの前処理の実行
 # ds.map(func).filter(pred) # DatasetはSourceでもあります
 ```
-# Iterator
+## Iterator
 マルチプロセスで非同期にデータをロードするイテレータを提供します。
 バッチの作成や前処理を別プロセスで行うので、メインプロセスのイテレーションが高速化します。
 また、開始時にデータをまとめてロードする必要がなくなります。
