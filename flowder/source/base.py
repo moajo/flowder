@@ -394,6 +394,8 @@ class FileCacheSource(WrapperSource):
             return
         if self._data is None:
             self.load(cache_if_not_yet=False)
+        if not self.cache_dir.exists():
+            self.cache_dir.mkdir(parents=True)
         with self.cache_file_path.open("wb") as f:
             pickle.dump(self._data, f)
         self.cache_length()
