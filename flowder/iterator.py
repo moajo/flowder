@@ -55,6 +55,7 @@ def create_iterator(
         pin_memory=True,
         drop_last=False,
         device=None,
+        prefetch_next_iterator=True,
 ):
     batch_transforms = batch_transforms or []
 
@@ -72,7 +73,13 @@ def create_iterator(
         pin_memory=pin_memory,
         drop_last=drop_last,
     )
-    return Iterator(loader, len(dataset), batch_size, device=device)
+    return Iterator(
+        loader,
+        len(dataset),
+        batch_size,
+        device=device,
+        prefetch_next_iterator=prefetch_next_iterator and num_workers != 0,
+    )
 
 
 def create_bucket_iterator(
@@ -85,6 +92,7 @@ def create_bucket_iterator(
         drop_last=False,
         device=None,
         over_sampling_rate=100,
+        prefetch_next_iterator=True,
 ):
     batch_transforms = batch_transforms or []
 
@@ -112,7 +120,12 @@ def create_bucket_iterator(
         drop_last=drop_last,
     )
     l = math.ceil(len(dataset) / batch_size)
-    return BucketIterator(loader, l, device=device)
+    return BucketIterator(
+        loader,
+        l,
+        device=device,
+        prefetch_next_iterator=prefetch_next_iterator and num_workers != 0,
+    )
 
 
 class Iterator:
