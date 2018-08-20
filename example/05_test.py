@@ -60,3 +60,17 @@ sliced = s[:5]
 assert sliced[1] == s[1]
 for a, b in zip(sliced, [n for n in range(10)][:5]):
     assert a == b
+
+sliced = s[5:]
+assert sliced[0] == s[5]
+for a, b in zip(sliced, [n for n in range(10)][5:]):
+    assert a == b
+
+s1, s2 = s[:5], s[5:]
+for a, b in zip(list(s1) + list(s2), s):
+    assert a == b
+
+for i in range(len(s1)):
+    assert s1[i] == s[i]
+for i in range(len(s2)):
+    assert s2[i] == s[i + 5]

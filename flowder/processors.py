@@ -3,6 +3,7 @@ from collections import OrderedDict, Counter
 from pathlib import Path
 
 from torchtext.vocab import Vocab
+from tqdm import tqdm
 
 
 class AggregateProcessor:
@@ -134,10 +135,12 @@ class BuildVocab(AggregateProcessor):
                 pickle.dump(self.word_counter, f)
             return False
 
-    def build_from_sources(self, *sources):
-        if self.load_cache_if_exists():
-            return
-        for s in sources:
-            for d in s:
-                self.data_feed(d)
+    def build_from_sources(self, *sources, show_progress=True):
+        if not self.load_cache_if_exists():
+            l = len(sources)
+            for i, s in enumerate(sources):
+                if s.has_length and show_progress:
+                    s = tqdm(s, desc=f"building vocab: source {i}/{l}")
+                for d in s:
+                    self.data_feed(d)
         self.build_vocab()
