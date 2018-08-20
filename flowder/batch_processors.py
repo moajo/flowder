@@ -49,9 +49,10 @@ def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
             prem = [batch[field_name][i][:, None] for i in indices]
             padded = pad_sequence(prem, padding_value=padding_value)
             result = padded[:, indices.sort()[1], 0]
+            result = result.contiguous()
 
             if include_length:
-                batch[field_name] = result, length
+                batch[field_name] = result, length.contiguous()
             else:
                 batch[field_name] = result
         return batch

@@ -12,7 +12,7 @@ def to_device(device):
         if isinstance(batch, dict):
             return {key: wrapper(batch[key]) for key in batch}
         if isinstance(batch, torch.Tensor):
-            return batch.to(device)
+            batch = batch.to(device)
         return batch
 
     return wrapper
@@ -93,6 +93,7 @@ def create_bucket_iterator(
         device=None,
         over_sampling_rate=100,
         prefetch_next_iterator=True,
+        batch_length_random=True,
 ):
     batch_transforms = batch_transforms or []
 
@@ -102,8 +103,12 @@ def create_bucket_iterator(
         except KeyError:
             raise KeyError("Failed to sort batch: is sort_key correct?")
 
+        index_list = range(0, len(sorted_over_batch), batch_size)
+        if batch_length_random:
+            index_list = np.random.permutation(index_list)
+
         bbb = []
-        for i in np.random.permutation(range(0, len(sorted_over_batch), batch_size)):
+        for i in index_list:
             batch = sorted_over_batch[i:i + batch_size]
             for t in batch_transforms:
                 batch = t(batch)
