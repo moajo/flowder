@@ -55,7 +55,7 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
                     d = tqdm(d._iter(), total=l, desc="[flowder.Source]loading...")
                 else:
                     d = tqdm(d._iter(), desc="[flowder.Source]loading...")
-            self._data = list(d)
+            self._data = list(d._iter())
             self.has_length = True
             self.random_access = True
         return self
@@ -202,6 +202,10 @@ class Field:
         self.preprocess = preprocess or []
         self.process = process or []
         self.loading_process = loading_process or []
+        assert all(
+            hasattr(p, "start_data_feed") and hasattr(p, "finish_data_feed") and hasattr(p, "data_feed")
+            for p in self.process
+        )
 
     def __getitem__(self, item):
         v = self.target_source[item]

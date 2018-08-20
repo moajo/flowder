@@ -468,50 +468,56 @@ class CachedIterator:
         self.parents = []
         self.children = []
 
-        self.last_i = None
-        self.value = None
-        self.iter = None  # 独立なら単にソースのイテレータ。依存なら親データから作成した自分のデータのイテレータ
-        self.reset()
+        self.cache_iter_inst = self._cache_iter()
 
-    def next(self, i):
+    def _cache_iter(self):
         """
-        異なるiで呼ばれるごとに、値を更新して返す。
-        前回と同じiで呼ばれたら前回のキャッシュ値をそのまま返す
-        値の更新は独立ソースと依存ソースで異なる。
+           異なるiで呼ばれるごとに、値を更新して返す。
+           前回と同じiで呼ばれたら前回のキャッシュ値をそのまま返す
+           値の更新は独立ソースと依存ソースで異なる。
 
-        # 独立の場合：
-        datasetのnextを呼ぶ
+           # 独立の場合：
+           datasetのnextを呼ぶ
 
-        # 依存の場合
-        親でーたセットのnext値のタプルから、calculate_valueする
+           # 依存の場合
+           親データセットのnext値のタプルから、calculate_valueする
 
-        :param i:
-        :return:
+           :return:
         """
 
-        if self.last_i == i:
-            return self.value
-        self.last_i = i
+        def cache(value, i):
+            while True:
+                next_i = yield value
+                if next_i is None or next_i == i:
+                    continue
+                break
 
         if not self.dataset.is_independent:  # 依存ソース
-            if self.iter is None:
-                for p in self.parents:
-                    p.next(i)
-                self.iter = self.dataset._calculate_value(*[p.value for p in self.parents])
-            try:
-                v = next(self.iter)
-                self.value = v
-            except StopIteration:
-                for p in self.parents:
-                    p.next(i)
-                self.iter = self.dataset._calculate_value(*[p.value for p in self.parents])
-                v = next(self.iter)
-                self.value = v
+            def hoge():
+                a = [p.cache_iter_inst for p in self.parents]
+                ii = 0
+                args = [next(p) for p in a]
+                while True:
+                    yield from cache(args, ii)
+                    ii += 1
+                    args = [p.send(ii) for p in a]
+
+            ppp = hoge()
+            args = next(ppp)
+            parent_i = 0
+            last_i = 0
+            while True:
+                for n in self.dataset._calculate_value(*args):
+                    yield from cache(n, last_i)
+                    last_i += 1
+
+                parent_i += 1
+                args = ppp.send(parent_i)
         else:
-            if self.iter is None:
-                self.iter = iter(self.dataset)
-            self.value = next(self.iter)
-        return self.value
+            i = 0
+            for v in self.dataset:
+                yield from cache(v, i)
+                i += 1
 
     @cache_value()
     def __getitem__(self, item):
@@ -520,14 +526,6 @@ class CachedIterator:
     @property
     def is_independent(self):
         return len(self.parents) == 0
-
-    def reset(self):
-        if not self.is_independent:
-            for p in self.parents:
-                p.reset()
-        self.last_i = None
-        self.iter = None
-        self.value = None
 
 
 def create_cache_iter_tree(fields):
@@ -631,20 +629,29 @@ class Dataset(Source):
                 f.finish_data_feed()
             return
         leaf_iterators = create_cache_iter_tree(fields)
+        l2 = [a.cache_iter_inst for a in leaf_iterators]
         for i in tqdm(range(self.size), desc=f"[flowder.Dataset]preprocessing {len(fields)} fields"):
-            for f, leaf in zip(fields, leaf_iterators):
-                f.data_feed(leaf.next(i))
+            for f, leaf in zip(fields, l2):
+                if i == 0:
+                    f.data_feed(next(leaf))
+                else:
+                    f.data_feed(leaf.send(i))
         for f in tqdm(fields, desc="[flowder.Dataset]preprocess closing"):
             f.finish_data_feed()
 
     def _iter(self):  # TODO preprocess未処理時にエラー?
         leaf_iterators = create_cache_iter_tree(self.fields)
+        l2 = [a.cache_iter_inst for a in leaf_iterators]
+        vs = [
+            f.calculate_value(next(leaf))
+            for f, leaf in zip(self.fields, l2)
+        ]
         for i in range(self.size):
-            vs = [
-                f.calculate_value(leaf.next(i))  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
-                for f, leaf in zip(self.fields, leaf_iterators)
-            ]
             yield create_example([f.name for f in self.fields], vs, return_as_tuple=self._return_as_tuple)
+            vs = [
+                f.calculate_value(leaf.send(i + 1))  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する
+                for f, leaf in zip(self.fields, l2)
+            ]
 
     def _getitem(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
         # leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
