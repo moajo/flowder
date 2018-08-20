@@ -143,4 +143,7 @@ class BuildVocab(AggregateProcessor):
                     s = tqdm(s, desc=f"building vocab: source {i}/{l}")
                 for d in s:
                     self.data_feed(d)
+        else:
+            if show_progress:
+                print("[flowder.BuildVocab] vocab is loaded from cache file.")
         self.build_vocab()

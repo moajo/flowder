@@ -11,6 +11,22 @@ import inspect
 from ..abstracts import Field, SourceBase
 
 
+def _dict_to_transform(transform_dict):
+    def wrapper(data):
+        if isinstance(data, tuple) or isinstance(data, list):
+            return tuple(
+                transform_dict[i](data[i]) if i in transform_dict else data[i]
+                for i in range(len(data))
+            )
+        elif isinstance(data, dict):
+            return {
+                key: transform_dict[key](data[key]) if key in transform_dict else data[key]
+                for key in data
+            }
+
+    return wrapper
+
+
 def cache_value(cache_arg_index=0):
     def decorator(func):
         cache = {}
@@ -39,6 +55,9 @@ class MapDummy:
         assert isinstance(source, SourceBase)
 
     def map(self, transform):
+        if isinstance(transform, dict):
+            transform = _dict_to_transform(transform)
+
         def merged_transform(item):
             item = self.transform(item)
             return transform(item)
@@ -128,6 +147,15 @@ class Source(SourceBase):
         return MapDummy(self, True)
 
     def map(self, transform):
+        """
+        if transform is dict, transform will convert only data on the key of dict
+
+        :param transform: function or dict
+        :return:
+        """
+        if isinstance(transform, dict):
+            transform = _dict_to_transform(transform)
+
         return MapSource(transform, self)
 
     def filter(self, pred):

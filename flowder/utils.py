@@ -12,6 +12,19 @@ def directory(path):
 
 
 def zip_source(*sources):
+    if len(sources) == 1 and isinstance(sources[0], dict):
+        d = sources[0]
+        keys = list(d)
+        ss = [d[k] for k in keys]
+
+        def wrapper(args):
+            return {
+                k: v
+                for k, v in zip(keys, args)
+            }
+
+        return ZipSource(*ss).map(wrapper)
+
     return ZipSource(*sources)
 
 

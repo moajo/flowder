@@ -74,3 +74,20 @@ for i in range(len(s1)):
     assert s1[i] == s[i]
 for i in range(len(s2)):
     assert s2[i] == s[i + 5]
+
+# MapTransform
+s = ArraySource([{"a": n, "b": n * 2} for n in range(10)])
+sm = s.map({
+    "a": lambda a: a - 1,
+    "b": lambda a: a + 1,
+})
+for a, b in zip(sm, [{"a": n - 1, "b": n * 2 + 1} for n in range(10)]):
+    assert a == b
+
+# zip
+s1 = ArraySource([n for n in range(10)])
+s2 = ArraySource([n * 2 for n in range(10)])
+z = zip_source({"a": s1, "b": s2})
+ref = [{"a": n, "b": n * 2} for n in range(10)]
+for a, b in zip(z, ref):
+    assert a == b

@@ -9,3 +9,4 @@ from flowder.iterator import create_bucket_iterator
 from flowder.processors import AggregateProcessor, BuildVocab
 from flowder.utils import file, zip_source, directory, create_dataset
 import flowder.source
+import flowder.batch_processors
