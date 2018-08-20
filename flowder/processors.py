@@ -94,10 +94,8 @@ class BuildVocab(AggregateProcessor):
         self.word_counter.update(tokenized_sentence)
 
     def start_data_feed(self, field):
-        if self.cache_file is not None and self.cache_file.exists():
-            with self.cache_file.open("rb") as f:
-                self.word_counter = pickle.load(f)
-                assert isinstance(self.word_counter, Counter)
+        load_success = self.load_cache_if_exists()
+        if load_success:
             return False
 
     def finish_data_feed(self, field):
@@ -110,6 +108,14 @@ class BuildVocab(AggregateProcessor):
         if self.auto_numericalize:
             return self.numericalize(tokenized_sentence)
         return tokenized_sentence
+
+    def load_cache_if_exists(self):
+        if self.cache_file is not None and self.cache_file.exists():
+            with self.cache_file.open("rb") as f:
+                self.word_counter = pickle.load(f)
+                assert isinstance(self.word_counter, Counter)
+            return True
+        return False
 
     def build_vocab(self):
         specials = list(OrderedDict.fromkeys([
@@ -127,3 +133,11 @@ class BuildVocab(AggregateProcessor):
             with self.cache_file.open("wb") as f:
                 pickle.dump(self.word_counter, f)
             return False
+
+    def build_from_sources(self, *sources):
+        if self.load_cache_if_exists():
+            return
+        for s in sources:
+            for d in s:
+                self.data_feed(d)
+        self.build_vocab()
