@@ -13,3 +13,4 @@ from .file import CSVSource
 from .file import DirectorySource
 from .file import ImageSource
 from .util import ArraySource
+from .util import FlatMap

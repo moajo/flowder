@@ -1,5 +1,6 @@
 from flowder.source import Source
 
+
 class ArraySource(Source):
     def __init__(self, contents):
         super(ArraySource, self).__init__()
@@ -13,6 +14,23 @@ class ArraySource(Source):
 
     def _iter(self):
         return iter(self.contents)
+
+
+class FlatMap(Source):
+    def __init__(self, parent, map):
+        super(FlatMap, self).__init__(parent, has_length=False, random_access=False)
+        self.map = map
+
+    def _iter(self):
+        for p in self.parent:
+            yield from self._calculate_value(p)
+
+    def _calculate_value(self, args):
+        for n in self.map(args):
+            yield n
+
+    def _calculate_size(self):
+        return sum(1 for _ in self)
 
 # class CollectSource(SourceBase):
 #     def __init__(self, base_source: SourceBase, key_index_map: dict, target_source: SourceBase):
