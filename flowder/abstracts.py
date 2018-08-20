@@ -101,14 +101,6 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
             self.load()
         return self._iter()
 
-    def reduce(self):
-        """
-        簡約。２重mapなどを一つにまとめて計算効率を高める。
-        iterationの前に呼んで効率的にすることが目的
-        :return:
-        """
-        return self
-
     def __str__(self):
         """
         a-b(hoge)┐
@@ -205,7 +197,7 @@ class Field:
         assert isinstance(target_source, SourceBase)
 
         self.name = name
-        self.target_source = target_source.reduce()
+        self.target_source = target_source
 
         self.preprocess = preprocess or []
         self.process = process or []

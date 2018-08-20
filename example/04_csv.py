@@ -17,10 +17,10 @@ for index, values in iris:
 
 images_dir_path = Path("data/celebA/img_align_celeba")
 d = directory(images_dir_path)
-for p in d.item.suffix == ".jpg":
+for p in d.item_if.suffix == ".jpg":
     assert isinstance(p, Path)
 
-for p in d.item.suffix == ".jpg":
+for p in d.item_if.suffix == ".jpg":
     assert isinstance(p, Path)
 
 anno = file("data/celebA/list_attr_celeba.txt").csv(header=1, sep="\s+")

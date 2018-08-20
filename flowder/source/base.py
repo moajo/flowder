@@ -26,15 +26,16 @@ def cache_value(cache_arg_index=0):
     return decorator
 
 
-class MapDummy(SourceBase):
+class MapDummy:
     """
-    to make map source easily
+    to make map/filter source easily
     """
 
-    def __init__(self, source, transform=None):
-        super().__init__(source)
+    def __init__(self, source, recursive, transform=None):
         self.source = source
         self.transform = transform or (lambda x: x)
+        self.recursive = recursive
+        assert isinstance(recursive, bool)
         assert isinstance(source, SourceBase)
 
     def map(self, transform):
@@ -47,16 +48,17 @@ class MapDummy(SourceBase):
     def filter(self, pred):
         return FilterSource(pred, MapSource(lambda x: self.transform(x), parent=self.source))
 
-    def reduce(self):
-        return MapSource(lambda x: self.transform(x), parent=self.source.reduce())
-
     def __getitem__(self, item):
-        return MapDummy(self.source, lambda x: self.transform(x)[item])
-        # return MapSource(lambda x: x[item], parent=self.source)
+        if self.recursive:
+            return MapDummy(self.source, True, lambda x: self.transform(x)[item])
+        else:
+            return MapSource(lambda x: x[item], parent=self.source)
 
     def __getattr__(self, item):
-        return MapDummy(self.source, lambda x: getattr(self.transform(x), item))
-        # return MapSource(lambda x: getattr(x, item), parent=self.source)
+        if self.recursive:
+            return MapDummy(self.source, True, lambda x: getattr(self.transform(x), item))
+        else:
+            return MapSource(lambda x: getattr(x, item), parent=self.source)
 
     def __iter__(self):
         return iter(self.reduce())
@@ -110,7 +112,20 @@ class Source(SourceBase):
         # mapped = MapSource(lambda x:x.hoge, source)
         :return:
         """
-        return MapDummy(self)
+        return MapDummy(self, False)
+
+    @property
+    def item_if(self):
+        """
+        short-hand for Filter
+        ex)
+        mapped = source.item_if[0]>0
+        # mapped = FilterSource(lambda x:x[0]>0, source)
+        mapped = source.item_if.user.name=="hoge"
+        # mapped = FilterSource(lambda x:x.user.name=="hoge", source)
+        :return:
+        """
+        return MapDummy(self, True)
 
     def map(self, transform):
         return MapSource(transform, self)
@@ -590,7 +605,11 @@ class Dataset(Source):
 
     @property
     def item(self):
-        return MapDummy(self)
+        return MapDummy(self, False)
+
+    @property
+    def item_if(self):
+        return MapDummy(self, True)
 
     def is_independent(self):
         return True
