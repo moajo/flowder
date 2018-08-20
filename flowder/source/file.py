@@ -1,3 +1,4 @@
+import json
 import linecache
 from ..abstracts import SourceBase
 from ..source.base import Source, MapSource
@@ -76,6 +77,9 @@ class TextFileSource(Source):
 
     def csv(self, **kwargs):
         return CSVSource(self.path, **kwargs)
+
+    def json(self, key=None):
+        return JSONSource(self.path, key)
 
     def _calculate_size(self):
         return 1
@@ -179,3 +183,21 @@ class ImageSource(Source):
     def _iter(self):
         for p in self.parent:
             yield self.Image.open(p)
+
+
+class JSONSource(Source):
+    """
+    Load a JSON file.
+    This source will load all data to memory immediately.
+    """
+
+    def __init__(self, path, key=None):
+        super(JSONSource, self).__init__()
+        self.key = key
+        self.path = pathlib.Path(path)
+
+        with self.path.open("r") as f:
+            if key is not None:
+                self._data = json.load(f)[key]
+            else:
+                self._data = json.load(f)
