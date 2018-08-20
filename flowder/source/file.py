@@ -1,33 +1,17 @@
 import json
 import linecache
 from ..abstracts import SourceBase
-from ..source.base import Source, MapSource
+from ..source.base import Source, MapSource, SlicedSource
 import pathlib
 
 
-class SlicedStrSource(Source):
-    def __init__(self, path, sliced_index):
-        super(SlicedStrSource, self).__init__()
-        self.path = pathlib.Path(path)
-        self.sliced_index = sliced_index
-        assert self.path.exists()
+class SlicedStrSource(SlicedSource):
+    def __init__(self, source, sliced_index):
+        assert isinstance(source, StrSource)
+        super(SlicedStrSource, self).__init__(source, sliced_index)
 
     def split(self, delimiter=" "):
         return MapSource(lambda x: x.split(delimiter), self)
-
-    def _calculate_size(self):
-        return len(self.sliced_index)
-
-    def _getitem(self, item):
-        if type(item) is int:
-            return linecache.getline(str(self.path), self.sliced_index[item] + 1)[:-1]
-        else:
-            sliced_index = self.sliced_index[item]
-            return SlicedStrSource(self.path, sliced_index)
-
-    def _iter(self):
-        for i in range(len(self.sliced_index)):
-            yield self[i]
 
 
 class StrSource(Source):
@@ -47,12 +31,12 @@ class StrSource(Source):
         with self.path.open(encoding="utf-8") as f:
             return sum(1 for _ in f)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         if type(item) is int:
             return linecache.getline(str(self.path), item + 1)[:-1]
         else:
             sliced_index = list(range(len(self)))[item]
-            return SlicedStrSource(self.path, sliced_index)
+            return SlicedStrSource(self, sliced_index)
 
     def _iter(self):
         with self.path.open(encoding="utf-8") as f:
@@ -84,7 +68,7 @@ class TextFileSource(Source):
     def _calculate_size(self):
         return 1
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         if item != 0:
             raise IndexError()
         return self.path.open(encoding="utf-8")
@@ -103,7 +87,7 @@ class CSVSource(Source):
     def _calculate_size(self):
         return len(self.data_frame)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         if isinstance(item, int):
             v = self.data_frame[item:item + 1]
             index, data = next(v.iterrows())
@@ -140,7 +124,7 @@ class DirectorySource(Source):
         assert self.path.exists()
         return sum(1 for _ in self.path.iterdir())
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         return list(self.path.iterdir())[item]
 
     def _iter(self):
@@ -162,7 +146,7 @@ class ImageSource(Source):
     def _calculate_value(self, path):
         yield self.Image.open(path)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         p = self.parent[item]
         if isinstance(item, int):
             if isinstance(p, str):

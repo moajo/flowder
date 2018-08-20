@@ -9,7 +9,7 @@ class ArraySource(Source):
     def _calculate_size(self):
         return len(self.contents)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         return self.contents[item]
 
     def _iter(self):

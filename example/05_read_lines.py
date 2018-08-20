@@ -54,3 +54,9 @@ ds.preprocess()
 
 for a, b in zip(data, s):
     assert a == b
+
+s = ArraySource([n for n in range(10)])
+sliced = s[:5]
+assert sliced[1] == s[1]
+for a, b in zip(sliced, [n for n in range(10)][:5]):
+    assert a == b

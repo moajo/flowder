@@ -165,6 +165,44 @@ class Source(SourceBase):
             show_progress_onload=show_progress_onload,
         )
 
+    def _getitem(self, item):
+        if isinstance(item, slice):
+            sliced_index = list(range(len(self)))[item]
+            return SlicedSource(self, sliced_index)
+        else:
+            return self._basic_getitem(item)
+
+    def _basic_getitem(self, item):
+        raise NotImplementedError()
+
+
+class SlicedSource(Source):
+    """
+    this source is independent
+    """
+
+    def __init__(self, parent, sliced_index):
+        super(SlicedSource, self).__init__(parent)
+        self.sliced_index = sliced_index
+        self.parent_source = parent
+
+    def _calculate_size(self):
+        return len(self.sliced_index)
+
+    def _getitem(self, item):
+        if type(item) is int:
+            return self.parent_source[self.sliced_index[item]]
+        else:
+            sliced_index = self.sliced_index[item]
+            return SlicedSource(self.parent_source, sliced_index)
+
+    def _iter(self):
+        for i in range(len(self.sliced_index)):
+            yield self[i]
+
+    def _is_independent(self):
+        return True
+
 
 class WrapperSource(Source):
     def __init__(self, parent, has_length=True, random_access=True, auto_load=False, show_progress_onload=False):
@@ -182,7 +220,7 @@ class WrapperSource(Source):
     def _calculate_value(self, args):
         return self.parent._calculate_value(args)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         return self.parent[item]
 
     def _iter(self):
@@ -209,7 +247,7 @@ class MapSource(Source):
     def _calculate_value(self, arg):
         yield self.transform(arg)
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         return self.transform(
             self.parent[item]
         )
@@ -240,7 +278,7 @@ class ZipSource(Source):
     def _calculate_value(self, *arg):
         yield arg
 
-    def _getitem(self, item):
+    def _basic_getitem(self, item):
         return tuple(p[item] for p in self.parents)
 
     def _iter(self):
@@ -265,17 +303,6 @@ class FilterSource(Source):  # TODO random access用のindex tableを事前計�
 
     def _calculate_value(self, arg):
         yield arg
-
-    def _getitem(self, item):
-        print("TODO worning")
-        if not isinstance(item, int):
-            raise NotImplementedError()
-
-        for d in self:
-            if item == 0:
-                return d
-            item -= 1
-        raise IndexError("index out of range")
 
     def _iter(self):
         c = 0
@@ -653,7 +680,7 @@ class Dataset(Source):
                 for f, leaf in zip(self.fields, l2)
             ]
 
-    def _getitem(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
+    def _basic_getitem(self, item):  # TODO fieldまたいで値のキャッシュ,slice item
         # leaf_iterators = create_cache_iter_tree(self.fields)  # todo to be instance field?
         # vs = [
         #     f.calculate_value(leaf[item])  # next(i)は終了するとStopIterationを投げるのでその場合そこで終了する

@@ -55,7 +55,9 @@ class SourceBase:  # TODO キャッシュの引数自動計算、並列処理
                     d = tqdm(d._iter(), total=l, desc="[flowder.Source]loading...")
                 else:
                     d = tqdm(d._iter(), desc="[flowder.Source]loading...")
-            self._data = list(d._iter())
+            else:
+                d = d._iter()
+            self._data = list(d)
             self.has_length = True
             self.random_access = True
         return self
