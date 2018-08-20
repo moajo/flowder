@@ -50,9 +50,12 @@ def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
             padded = pad_sequence(prem, padding_value=padding_value)
             result = padded[:, indices.sort()[1], 0]
             result = result.contiguous()
+            # result = result.pin_memory()
 
             if include_length:
-                batch[field_name] = result, length.contiguous()
+                length = length.contiguous()
+                # length = length.pin_memory()
+                batch[field_name] = result, length
             else:
                 batch[field_name] = result
         return batch
