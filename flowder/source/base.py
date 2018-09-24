@@ -453,16 +453,25 @@ class FileCacheSource(WrapperSource):
             pickle.dump(l, f)
         return self
 
-    def load(self, cache_if_not_yet=True):
+    def load(self, cache_if_not_yet=True, clear_cache: str = None):
         """
         データが読み込み済みならそれを返す。
-        読み込み済みでなければ、キャッシュファイルが存在すればそこからロードする。
+        キャッシュファイルが存在すればそこからロードする。
         キャッシュファイルが無ければ、データを読み込む。
         その後、cache_if_not_yet=Trueなら、キャッシュファイルを作る。
-        :param cache_if_not_yet:
+
+        clear_cacheが指定されればキャッシュを削除し、無条件でデータを読み込む。
+        :param cache_if_not_yet: load後にファイルキャッシュを作成するかどうか (default: True)
+        :param clear_cache: キャッシュを削除するかどうか
+            "default": clear_cache(self, remove_all=False)
+            "all": clear_cache(self, remove_all=True)
         :return:
         """
-        if self.is_loaded:
+        if clear_cache is not None:
+            assert clear_cache in ["all", "default"]
+            remove_all = clear_cache == "all"
+            self.clear_cache(remove_all=remove_all)
+        elif self.is_loaded:
             return self
         if self.cache_file_path.exists():
             print(f"[flowder.FileCacheSource({self.cache_group_name})]load from cache file...")
