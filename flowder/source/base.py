@@ -433,10 +433,10 @@ class FileCacheSource(WrapperSource):
         """
         データ読み込みはせず、長さだけキャッシュする。
         初回は全データイテレーションするため遅いが、２回目以降はロードの必要がなくなる。
-        :return:
+        :return: self
         """
         if self.cache_length_path.exists():
-            return
+            return self
 
         if self.has_length:
             l = len(self)

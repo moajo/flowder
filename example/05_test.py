@@ -49,7 +49,7 @@ count = TestProcess()
 
 f = Field("test", s, process=[count])
 
-ds = create_dataset(len(s), f)
+ds = create_dataset(f)
 ds.preprocess()
 
 for a, b in zip(data, s):

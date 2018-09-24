@@ -17,14 +17,14 @@ for data in zipped:
 
 f1 = Field("ja", ja)
 f2 = Field("en", en)
-dataset = create_dataset(len(ja), f1, f2)
+dataset = create_dataset(f1, f2)
 for example in dataset:
     assert isinstance(example, dict)
     assert "ja" in example
     assert isinstance(example["ja"], str)
     assert isinstance(example["en"], str)
 
-dataset = create_dataset(len(ja), f1, f2, return_as_tuple=True)
+dataset = create_dataset(f1, f2, return_as_tuple=True)
 for example in dataset:
     assert isinstance(example, tuple) and len(example) == 2
     j, e = example

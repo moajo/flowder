@@ -119,6 +119,11 @@ class BuildVocab(AggregateProcessor):
         return False
 
     def build_vocab(self):
+        """
+        CounterからVocabを作成する
+        cache_fileが指定されていれば、キャッシュを作成する
+        :return: None
+        """
         specials = list(OrderedDict.fromkeys([
             tok for tok in [
                 self.unk_token,
@@ -133,7 +138,6 @@ class BuildVocab(AggregateProcessor):
                 self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             with self.cache_file.open("wb") as f:
                 pickle.dump(self.word_counter, f)
-            return False
 
     def build_from_sources(self, *sources, show_progress=True):
         if not self.load_cache_if_exists():

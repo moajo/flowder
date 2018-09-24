@@ -28,9 +28,14 @@ def zip_source(*sources):
     return ZipSource(*sources)
 
 
-def create_dataset(size, *fields, return_as_tuple=False):
-    assert isinstance(size, int)
+def create_dataset(*fields, size: int = None, return_as_tuple=False):
     assert all(isinstance(f, Field) for f in fields)
+    if size is None:
+        for f in fields:
+            if f.target_source.has_length:
+                size = len(f.target_source)
+                break
+    assert isinstance(size, int)
     return Dataset(
         fields,
         size,

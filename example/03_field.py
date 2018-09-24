@@ -18,7 +18,7 @@ for data in zipped:
 
 f1 = TextField("ja", ja)
 f2 = TextField("en", en, numericalize=False)
-dataset = create_dataset(len(ja), f1, f2)
+dataset = create_dataset(f1, f2)
 
 dataset.preprocess()
 for example in dataset:
