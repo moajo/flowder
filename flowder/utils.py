@@ -29,12 +29,12 @@ def zip_source(*sources):
 
 
 def create_dataset(*fields, size: int = None, return_as_tuple=False):
-    assert all(isinstance(f, Field) for f in fields)
+    assert all(isinstance(f, Field) for f in fields), "fields must be instance of Field. is argument correct?"
     if size is None:
-        for f in fields:
-            if f.target_source.has_length:
-                size = len(f.target_source)
-                break
+        size_list = [len(f.target_source) for f in fields if f.target_source.has_length]
+        assert len(size_list) > 0, "every fields has no size. least one field must has size."
+        assert all(size_list[0] == it for it in size_list), "all size of field must be equals"
+        size = size_list[0]
     assert isinstance(size, int)
     return Dataset(
         fields,
