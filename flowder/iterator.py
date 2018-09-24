@@ -12,7 +12,7 @@ def to_device(device):
         if isinstance(batch, dict):
             return {key: wrapper(batch[key]) for key in batch}
         if isinstance(batch, torch.Tensor):
-            batch = batch.cuda(device, non_blocking=True)
+            batch = batch.to(device=device, non_blocking=True)
         return batch
 
     return wrapper
