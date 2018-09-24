@@ -236,11 +236,11 @@ class SlicedSource(Source):
         return len(self.sliced_index)
 
     def _getitem(self, item):
-        if type(item) is int:
-            return self.parent_source[self.sliced_index[item]]
-        else:
+        if isinstance(item, slice):
             sliced_index = self.sliced_index[item]
             return SlicedSource(self.parent_source, sliced_index)
+        else:
+            return self.parent_source[self.sliced_index[item]]
 
     def _iter(self):
         for i in range(len(self.sliced_index)):
