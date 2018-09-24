@@ -27,6 +27,22 @@ def _dict_to_transform(transform_dict):
     return wrapper
 
 
+def _dict_to_filter(filter_dict):
+    def wrapper(data):
+        if isinstance(data, tuple) or isinstance(data, list):
+            return all(
+                filter_dict[i](data[i]) if i in filter_dict else True
+                for i in range(len(data))
+            )
+        elif isinstance(data, dict):
+            return all(
+                filter_dict[key](data[key]) if key in filter_dict else True
+                for key in data
+            )
+
+    return wrapper
+
+
 def cache_value(cache_arg_index=0):
     def decorator(func):
         cache = {}
@@ -159,6 +175,8 @@ class Source(SourceBase):
         return MapSource(transform, self)
 
     def filter(self, pred):
+        if isinstance(pred, dict):
+            pred = _dict_to_filter(pred)
         return FilterSource(pred, self)
 
     def file_cache(self, cache_group_name, *cache_args, cache_dir=".tmp", caller_file_name=None,
