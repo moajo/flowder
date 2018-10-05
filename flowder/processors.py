@@ -1,72 +1,62 @@
+import inspect
+import pathlib
 import pickle
 from collections import OrderedDict, Counter
-from pathlib import Path
 
+from flowder.utils import map_pipe
+
+from flowder.source import Source
 from torchtext.vocab import Vocab
 from tqdm import tqdm
 
 
-class AggregateProcessor:
-    """
-    データ全体の統計をとる前処理
-    複数のFieldで同時に使われることもある。
-    Field.aggregate_preprocessで
-    """
+class Aggregator:
+    def __init__(self, name):
+        self.name = name
 
-    def start_data_feed(self, field):
-        """
-        data feedの開始前に呼ばれる
-        :param field:
-        :return: Falseを返すとdata feedを中止する
-        """
-        return True
+    def __rrshift__(self, other):
+        if isinstance(other, Source):
+            self.feed_data(other)
+        else:
+            raise TypeError("invalid aggregate operation")
 
-    def data_feed(self, item):
-        """
-        data feed。データ全件が一つづつ流れてくる
-        :param item:
-        :return:
-        """
-        raise NotImplementedError()
-
-    def finish_data_feed(self, field):
-        """
-        data feedの終了後に呼ばれる
-        :param field:
-        :return:
-        """
-        pass
-
-    def __call__(self, preprocessed_value):
-        """
-        実際の処理
-        :param preprocessed_value:
-        :return:
-        """
+    def feed_data(self, data: Source):
         raise NotImplementedError()
 
 
-class BuildVocab(AggregateProcessor):
+class VocabBuilder(Aggregator):
+
     def __init__(self,
+                 name: str,
+                 vocab=None,
+                 cache="yes",
                  unk_token="<unk>",
                  pad_token="<pad>",
-                 additional_special_token=None,
-                 cache_file=None,
-                 vocab=None,
-                 auto_numericalize=False,
+                 additional_special_token=("sos", "eos"),
+                 cache_dir=".tmp",
+                 caller_file_name=None,
                  **kwargs
                  ):
         """
-
-        :param unk_token: 未知語を表す特殊文字として使われる。必須
-        :param pad_token: Noneで無視。paddingに使う。Noneでなければindexは1
+        SourceからVocabを作成する。
+        :param vocab: torchtext.vocab.Vocab。
+        :param cache: WordCounterのキャッシュの設定。
+        "yes": 作成後にキャッシュし、キャッシュがあればロードする。(default)
+        "ignore": キャッシュを無視し、ビルド後にキャッシュを作成(上書き)する。
+        "clear": キャッシュがあれば削除し、作成しない。
+        "no": キャッシュを作成しない。
+        :param unk_token: 未知語を表す特殊文字として使われる。indexは0。必須
+        :param pad_token: Noneで無視。paddingに使う。indexは1。必須
         :param additional_special_token: 追加されるトークン。strまたは[str]。indexは2から割り当てられる。
-        :param cache_file: 設定すればword_counterをファイルにキャッシュする。
-        :param vocab: torchtext.vocab.Vocab
         :param kwargs: 作成されるVocabのコンストラクタに渡される。
         """
-        assert unk_token is not None
-        if isinstance(additional_special_token, list):
+
+        assert cache in ["yes", "ignore", "clear", "no"]
+        assert type(unk_token) == str
+        assert type(pad_token) == str
+        assert isinstance(vocab, Vocab) or vocab is None
+
+        if type(additional_special_token) in [list, tuple]:
             assert all(isinstance(a, str) for a in additional_special_token)
         elif isinstance(additional_special_token, str):
             additional_special_token = [additional_special_token]
@@ -75,44 +65,67 @@ class BuildVocab(AggregateProcessor):
         else:
             assert False
 
-        assert isinstance(vocab, Vocab) or vocab is None
+        super(VocabBuilder, self).__init__(name)
+        self.cache = cache
+        cache_dir = pathlib.Path(cache_dir)
 
         self.unk_token = unk_token
         self.pad_token = pad_token
         self.additional_special_token = additional_special_token
-        self.cache_file = Path(cache_file) if cache_file is not None else None
-        self.auto_numericalize = auto_numericalize
+
+        if caller_file_name is None:
+            p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
+            caller_file_name = p.name[:-len(p.suffix)]
+
+        cache_base_name = f"flowder.{caller_file_name}.VocabBuilder({name})"
+        self.cache_file_path = cache_dir / cache_base_name
 
         self.vocab = vocab
         self.word_counter = Counter()
         self._kwargs = kwargs
 
-    def clear_cache(self):
-        if self.cache_file is not None and self.cache_file.exists():
-            self.cache_file.unlink()
+        if cache == "yes":
+            self.try_load_cache()
+        elif cache == "clear":
+            self.clear_cache()
 
-    def data_feed(self, tokenized_sentence):
-        self.word_counter.update(tokenized_sentence)
+    def feed_data(self, data: Source):
+        if self.cache == "yes":
+            load_success = self.try_load_cache()
+            if load_success:
+                self.build_vocab()
+                return False
 
-    def start_data_feed(self, field):
-        load_success = self.load_cache_if_exists()
-        if load_success:
-            return False
+        desc = f"flowder.VocabBuilder({self.name}): building..."
+        if data.has_length:
+            it = tqdm(data, desc=desc)
+        else:
+            it = tqdm(iter(data), desc=desc)
 
-    def finish_data_feed(self, field):
+        for tokenized_sentence in it:
+            self.word_counter.update(tokenized_sentence)
+
         self.build_vocab()
+        return True
+
+    def clear_cache(self):
+        if self.cache_file_path.exists():
+            self.cache_file_path.unlink()
 
     def numericalize(self, tokenized_sentence):
         return [self.vocab.stoi[word] for word in tokenized_sentence]
 
-    def __call__(self, tokenized_sentence):
-        if self.auto_numericalize:
+    def pipe_numericalize(self):
+        @map_pipe()
+        def w(tokenized_sentence):
             return self.numericalize(tokenized_sentence)
-        return tokenized_sentence
 
-    def load_cache_if_exists(self):
-        if self.cache_file is not None and self.cache_file.exists():
-            with self.cache_file.open("rb") as f:
+        return w
+
+    def try_load_cache(self):
+        if self.cache_file_path.exists():
+            print(f"flowder.VocabBuilder({self.name}): loading from cache...")
+            with self.cache_file_path.open("rb") as f:
                 self.word_counter = pickle.load(f)
                 assert isinstance(self.word_counter, Counter)
             return True
@@ -133,21 +146,8 @@ class BuildVocab(AggregateProcessor):
             if tok is not None
         ]))
         self.vocab = Vocab(self.word_counter, specials=specials, **self._kwargs)
-        if self.cache_file is not None and not self.cache_file.exists():
-            if not self.cache_file.parent.exists():
-                self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.cache_file.open("wb") as f:
+        if self.cache == "ignore" or (self.cache == "yes" and not self.cache_file_path.exists()):
+            if not self.cache_file_path.parent.exists():
+                self.cache_file_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.cache_file_path.open("wb") as f:
                 pickle.dump(self.word_counter, f)
-
-    def build_from_sources(self, *sources, show_progress=True):
-        if not self.load_cache_if_exists():
-            l = len(sources)
-            for i, s in enumerate(sources):
-                if s.has_length and show_progress:
-                    s = tqdm(s, desc=f"building vocab: source {i}/{l}")
-                for d in s:
-                    self.data_feed(d)
-        else:
-            if show_progress:
-                print("[flowder.BuildVocab] vocab is loaded from cache file.")
-        self.build_vocab()

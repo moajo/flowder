@@ -1,187 +1,202 @@
 import json
 import linecache
+
+from rx import Observable, Observer
+
 from ..abstracts import SourceBase
-from ..source.base import Source, MapSource, SlicedSource
+from ..source.base import Source
 import pathlib
 
 
-class SlicedStrSource(SlicedSource):
-    def __init__(self, source, sliced_index):
-        assert isinstance(source, StrSource)
-        super(SlicedStrSource, self).__init__(source, sliced_index)
-
-    def split(self, delimiter=" "):
-        return MapSource(lambda x: x.split(delimiter), self)
-
-
-class StrSource(Source):
-    """
-    特定ファイルの各行を返すソース
-    """
-
-    def __init__(self, path):
-        super(StrSource, self).__init__()
-        self.path = pathlib.Path(path)
-        assert self.path.exists()
-
-    def split(self, delimiter=" "):
-        return MapSource(lambda x: x.split(delimiter), self)
-
-    def _calculate_size(self):
-        with self.path.open(encoding="utf-8") as f:
-            return sum(1 for _ in f)
-
-    def _basic_getitem(self, item):
-        if type(item) is int:
-            return linecache.getline(str(self.path), item + 1)[:-1]
-        else:
-            sliced_index = list(range(len(self)))[item]
-            return SlicedStrSource(self, sliced_index)
-
-    def _iter(self):
-        with self.path.open(encoding="utf-8") as f:
-            for line in f:
-                yield line[:-1]
-
-    def _str(self):
-        return super(StrSource, self)._str() + f"({self.path})"
+# def lines(path):
+#     path = pathlib.Path(path)
+#     assert path.exists()
+#
+#     def _gen():
+#         with path.open(encoding="utf-8") as f:
+#             for line in f:
+#                 yield line[:-1]
+#
+#     return Observable.from_(_gen())
 
 
-class TextFileSource(Source):
-    """
-    iterate a single value which opened file
-    """
-
-    def __init__(self, path):
-        super(TextFileSource, self).__init__()
-        self.path = pathlib.Path(path)
-
-    def lines(self):
-        return StrSource(self.path)
-
-    def csv(self, **kwargs):
-        return CSVSource(self.path, **kwargs)
-
-    def json(self, key=None):
-        return JSONSource(self.path, key)
-
-    def _calculate_size(self):
-        return 1
-
-    def _basic_getitem(self, item):
-        if item != 0:
-            raise IndexError()
-        return self.path.open(encoding="utf-8")
-
-    def _iter(self):
-        with self.path.open(encoding="utf-8") as f:
-            yield f
-
-
-class CSVSource(Source):
-    def __init__(self, path_or_buffer, **kwargs):
-        import pandas as pd
-        super(CSVSource, self).__init__()
-        self.data_frame = pd.read_csv(path_or_buffer, **kwargs)
-
-    def _calculate_size(self):
-        return len(self.data_frame)
-
-    def _basic_getitem(self, item):
-        if isinstance(item, int):
-            v = self.data_frame[item:item + 1]
-            index, data = next(v.iterrows())
-            return index, {key: data[key] for key in v.keys()}
-        v = self.data_frame[item]
-        return [
-            (
-                index,
-                {key: data[key] for key in data.keys()}
-            )
-            for index, data in v.iterrows()]
-
-    def _iter(self):
-        return (
-            (
-                index,
-                {key: data[key] for key in data.keys()}
-            )
-            for index, data in self.data_frame.iterrows())
+# class SlicedStrSource(SlicedSource):
+#     def __init__(self, source, sliced_index):
+#         assert isinstance(source, StrSource)
+#         super(SlicedStrSource, self).__init__(source, sliced_index)
+#
+#     def split(self, delimiter=" "):
+#         return MapSource(lambda x: x.split(delimiter), self)
+#
+#
+# class StrSource(Source):
+#     """
+#     特定ファイルの各行を返すソース
+#     """
+#
+#     def __init__(self, path):
+#         super(StrSource, self).__init__()
+#         self.path = pathlib.Path(path)
+#         assert self.path.exists()
+#
+#     def split(self, delimiter=" "):
+#         return MapSource(lambda x: x.split(delimiter), self)
+#
+#     def _calculate_size(self):
+#         with self.path.open(encoding="utf-8") as f:
+#             return sum(1 for _ in f)
+#
+#     def _basic_getitem(self, item):
+#         if type(item) is int:
+#             return linecache.getline(str(self.path), item + 1)[:-1]
+#         else:
+#             sliced_index = list(range(len(self)))[item]
+#             return SlicedStrSource(self, sliced_index)
+#
+#     def _iter(self):
+#         with self.path.open(encoding="utf-8") as f:
+#             for line in f:
+#                 yield line[:-1]
+#
+#     def _str(self):
+#         return super(StrSource, self)._str() + f"({self.path})"
 
 
-class DirectorySource(Source):
-    def __init__(self, path):
-        super(DirectorySource, self).__init__()
-        self.path = pathlib.Path(path)
-
-    def open(self, **kwargs):
-        return MapSource(lambda p: open(p, **kwargs), self)
-
-    def image(self):
-        return ImageSource(self)
-
-    def _calculate_size(self):
-        assert self.path.exists()
-        return sum(1 for _ in self.path.iterdir())
-
-    def _basic_getitem(self, item):
-        return list(self.path.iterdir())[item]
-
-    def _iter(self):
-        return self.path.iterdir()
-
-
-class ImageSource(Source):
-    Image = None
-
-    def __init__(self, path_source: SourceBase):
-        super(ImageSource, self).__init__(path_source)
-        if self.Image is None:
-            from PIL import Image
-            self.Image = Image
-
-    def calculate_size(self):
-        return len(self.parent)
-
-    def _calculate_value(self, path):
-        yield self.Image.open(path)
-
-    def _basic_getitem(self, item):
-        p = self.parent[item]
-        if isinstance(item, int):
-            if isinstance(p, str):
-                p = pathlib.Path(p)
-
-            assert isinstance(p, pathlib.Path)
-            return self.Image.open(p)
-        else:
-            ps = p
-            ps = [
-                pathlib.Path(p) if isinstance(p, str) else p
-                for p in ps
-            ]
-            assert all(isinstance(p, pathlib.Path) for p in ps)
-
-            return [self.Image.open(p) for p in ps]
-
-    def _iter(self):
-        for p in self.parent:
-            yield self.Image.open(p)
+# class TextFileSource(Source):
+#     """
+#     iterate a single value which opened file
+#     """
+#
+#     def __init__(self, path):
+#         super(TextFileSource, self).__init__()
+#         self.path = pathlib.Path(path)
+#
+#     def lines(self):
+#         return StrSource(self.path)
+#
+#     def csv(self, **kwargs):
+#         return CSVSource(self.path, **kwargs)
+#
+#     def json(self, key=None):
+#         return JSONSource(self.path, key)
+#
+#     def _calculate_size(self):
+#         return 1
+#
+#     def _basic_getitem(self, item):
+#         if item != 0:
+#             raise IndexError()
+#         return self.path.open(encoding="utf-8")
+#
+#     def _iter(self):
+#         with self.path.open(encoding="utf-8") as f:
+#             yield f
 
 
-class JSONSource(Source):
-    """
-    Load a JSON file.
-    This source will load all data to memory immediately.
-    """
+# class CSVSource(Source):
+#     def __init__(self, path_or_buffer, **kwargs):
+#         import pandas as pd
+#         super(CSVSource, self).__init__()
+#         self.data_frame = pd.read_csv(path_or_buffer, **kwargs)
+#
+#     def _calculate_size(self):
+#         return len(self.data_frame)
+#
+#     def _basic_getitem(self, item):
+#         if isinstance(item, int):
+#             v = self.data_frame[item:item + 1]
+#             index, data = next(v.iterrows())
+#             return index, {key: data[key] for key in v.keys()}
+#         v = self.data_frame[item]
+#         return [
+#             (
+#                 index,
+#                 {key: data[key] for key in data.keys()}
+#             )
+#             for index, data in v.iterrows()]
+#
+#     def _iter(self):
+#         return (
+#             (
+#                 index,
+#                 {key: data[key] for key in data.keys()}
+#             )
+#             for index, data in self.data_frame.iterrows())
 
-    def __init__(self, path, key=None):
-        super(JSONSource, self).__init__()
-        self.key = key
-        self.path = pathlib.Path(path)
 
-        with self.path.open("r") as f:
-            if key is not None:
-                self._data = json.load(f)[key]
-            else:
-                self._data = json.load(f)
+# class DirectorySource(Source):
+#     def __init__(self, path):
+#         super(DirectorySource, self).__init__()
+#         self.path = pathlib.Path(path)
+#
+#     def open(self, **kwargs):
+#         return MapSource(lambda p: open(p, **kwargs), self)
+#
+#     def image(self):
+#         return ImageSource(self)
+#
+#     def _calculate_size(self):
+#         assert self.path.exists()
+#         return sum(1 for _ in self.path.iterdir())
+#
+#     def _basic_getitem(self, item):
+#         return list(self.path.iterdir())[item]
+#
+#     def _iter(self):
+#         return self.path.iterdir()
+
+
+# class ImageSource(Source):
+#     Image = None
+#
+#     def __init__(self, path_source: SourceBase):
+#         super(ImageSource, self).__init__(path_source)
+#         if self.Image is None:
+#             from PIL import Image
+#             self.Image = Image
+#
+#     def calculate_size(self):
+#         return len(self.parent)
+#
+#     def _calculate_value(self, path):
+#         yield self.Image.open(path)
+#
+#     def _basic_getitem(self, item):
+#         p = self.parent[item]
+#         if isinstance(item, int):
+#             if isinstance(p, str):
+#                 p = pathlib.Path(p)
+#
+#             assert isinstance(p, pathlib.Path)
+#             return self.Image.open(p)
+#         else:
+#             ps = p
+#             ps = [
+#                 pathlib.Path(p) if isinstance(p, str) else p
+#                 for p in ps
+#             ]
+#             assert all(isinstance(p, pathlib.Path) for p in ps)
+#
+#             return [self.Image.open(p) for p in ps]
+#
+#     def _iter(self):
+#         for p in self.parent:
+#             yield self.Image.open(p)
+
+
+# class JSONSource(Source):
+#     """
+#     Load a JSON file.
+#     This source will load all data to memory immediately.
+#     """
+#
+#     def __init__(self, path, key=None):
+#         super(JSONSource, self).__init__()
+#         self.key = key
+#         self.path = pathlib.Path(path)
+#
+#         with self.path.open("r") as f:
+#             if key is not None:
+#                 self._data = json.load(f)[key]
+#             else:
+#                 self._data = json.load(f)
