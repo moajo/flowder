@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from flowder.utils import map_pipe
-
 from flowder.source.base import DependFunc, Mapped, mapped
 
 

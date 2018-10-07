@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
-    ic_from_generator, ic_concat, ic_flat_map
+    ic_concat, ic_flat_map
 
 
 class PipeLine:
