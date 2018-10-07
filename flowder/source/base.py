@@ -437,7 +437,7 @@ class Source:
             return
 
         if cache_file_path.exists():
-            print(f"[flowder.cache({name})]load from cache file...")
+            print(f"[flowder.cache({name})]loading from cache file...\n\tcache file: {cache_file_path}")
             with cache_file_path.open("rb") as f:
                 data = pickle.load(f)
                 self.data = data
@@ -446,7 +446,7 @@ class Source:
             return self
         else:
             if self.data is None:
-                desc = f"[flowder.cache({name})]loading data..."
+                desc = f"[flowder.cache({name})]loading data from source..."
                 if self.has_length:
                     it = tqdm(self._raw(0), total=len(self), desc=desc)
                 else:
@@ -456,7 +456,7 @@ class Source:
                 self.length = len(data)
                 self._raw = ic_from_array(data)
 
-            print(f"[flowder.cache({name})]create cache file...")
+            print(f"[flowder.cache({name})]create cache file...\n\tcache file: {cache_file_path}")
             if not cache_dir.exists():
                 cache_dir.mkdir(parents=True)
             with cache_file_path.open("wb") as f:
@@ -466,7 +466,7 @@ class Source:
     def mem_cache(self):
         if self.data is not None:
             return
-        desc = f"[flowder.cache(?)]loading data..."
+        desc = f"[flowder.cache(?)]loading data from source..."
         if self.has_length:
             it = tqdm(self._raw(0), total=len(self), desc=desc)
         else:
@@ -536,7 +536,7 @@ def _calc_args_hash(args):
             hs = (hs * 31 + obj) % sys.maxsize
         else:
             raise ValueError(
-                f"{obj} is not hashable.\nall arguments are needed to be hashable for caching."
+                f"{obj} is not hashable.\nall arguments are needed to be hashable for caching"
             )
     return hs
 

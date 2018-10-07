@@ -54,7 +54,7 @@ class VocabBuilder(Aggregator):
 
         super(VocabBuilder, self).__init__(name)
         self.cache = cache
-        cache_dir = pathlib.Path(cache_dir)
+        self.cache_dir = pathlib.Path(cache_dir)
 
         self.unk_token = unk_token
         self.pad_token = pad_token
@@ -64,23 +64,30 @@ class VocabBuilder(Aggregator):
             p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
             caller_file_name = p.name[:-len(p.suffix)]
 
-        cache_base_name = f"flowder.{caller_file_name}.VocabBuilder({name})"
-        self.cache_file_path = cache_dir / cache_base_name
+        self.cache_base_name = f"flowder.{caller_file_name}.VocabBuilder({name})."
+        # self.cache_file_path = cache_dir / cache_base_name
 
         self.vocab = vocab
         self.word_counter = Counter()
         self._kwargs = kwargs
 
-        if cache == "yes":
-            self.try_load_cache()
-        elif cache == "clear":
-            self.clear_cache()
+    def get_cache_file_path(self, source: Source):
+        """
+        指定されたSourceに対するcacheのファイルパスを得る
+        :param source:
+        :return:
+        """
+        assert isinstance(source, Source)
+        return self.cache_dir / f"{self.cache_base_name}{source.hash}"
 
     def feed_data(self, data: Source):
+        if self.cache == "clear":
+            self.clear_cache(data)
         if self.cache == "yes":
-            load_success = self.try_load_cache()
+            load_success = self.try_load_cache(data)
             if load_success:
                 self.build_vocab()
+                self.create_cache(data)
                 return False
 
         desc = f"flowder.VocabBuilder({self.name}): building..."
@@ -93,11 +100,23 @@ class VocabBuilder(Aggregator):
             self.word_counter.update(tokenized_sentence)
 
         self.build_vocab()
+        self.create_cache(data)
         return True
 
-    def clear_cache(self):
-        if self.cache_file_path.exists():
-            self.cache_file_path.unlink()
+    def clear_cache(self, source: Source, clear_all=False):
+        """
+        キャッシュを削除する
+        :param source: 対象ソース
+        :param clear_all: Trueなら、ソースを無視してすべてのキャッシュを削除する
+        :return:
+        """
+        if clear_all:
+            for p in self.cache_dir.glob(f"{self.cache_base_name}.*"):
+                p.unlink()
+        else:
+            cache_file_path = self.get_cache_file_path(source)
+            if cache_file_path.exists():
+                cache_file_path.unlink()
 
     def numericalize(self, tokenized_sentence):
         return [self.vocab.stoi[word] for word in tokenized_sentence]
@@ -115,10 +134,11 @@ class VocabBuilder(Aggregator):
 
         return w
 
-    def try_load_cache(self):
-        if self.cache_file_path.exists():
-            print(f"flowder.VocabBuilder({self.name}): loading from cache...")
-            with self.cache_file_path.open("rb") as f:
+    def try_load_cache(self, source: Source):
+        cache_file_path = self.get_cache_file_path(source)
+        if cache_file_path.exists():
+            print(f"flowder.VocabBuilder({self.name}): loading from cache...\n\tcache file: {cache_file_path}")
+            with cache_file_path.open("rb") as f:
                 self.word_counter = pickle.load(f)
                 assert isinstance(self.word_counter, Counter)
             return True
@@ -139,8 +159,12 @@ class VocabBuilder(Aggregator):
             if tok is not None
         ]))
         self.vocab = Vocab(self.word_counter, specials=specials, **self._kwargs)
-        if self.cache == "ignore" or (self.cache == "yes" and not self.cache_file_path.exists()):
-            if not self.cache_file_path.parent.exists():
-                self.cache_file_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.cache_file_path.open("wb") as f:
+
+    def create_cache(self, source: Source):
+        assert self.vocab is not None, "Vocab must be built before create cache"
+        cache_file_path = self.get_cache_file_path(source)
+        if self.cache == "ignore" or (self.cache == "yes" and not cache_file_path.exists()):
+            if not cache_file_path.parent.exists():
+                cache_file_path.parent.mkdir(parents=True, exist_ok=True)
+            with cache_file_path.open("wb") as f:
                 pickle.dump(self.word_counter, f)
