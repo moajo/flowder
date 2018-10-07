@@ -4,113 +4,12 @@ import pickle
 import sys
 
 import inspect
-from typing import Iterable, Callable
 
 from tqdm import tqdm
 
-# iterationとslice反復、indexでのrandom access
-IterableCreator = Callable[[int], Iterable]
-
-
-def ic_filter(ic, pred):
-    def gen():
-        for item in ic(0):
-            if pred(item):
-                yield item
-
-    return ic_from_generator(gen)
-
-
-def ic_map(ic, transform):
-    def _w(start):
-        for item in ic(start):
-            yield transform(item)
-
-    return _w
-
-
-def ic_from_array(array) -> IterableCreator:
-    def _w(start: int):
-        yield from array[start:]
-
-    return _w
-
-
-def ic_slice(ic: IterableCreator, s: slice) -> IterableCreator:
-    slice_step = s.step if s.step is not None else 1
-    slice_start = s.start if s.start is not None else 0
-    if s.stop is None:
-        def _w(start):
-            ds = slice_start + slice_step * start
-            yield from ic(ds)
-
-        return _w
-    else:
-
-        def _w(start):
-            ds = slice_start + slice_step * start
-            c = (s.stop - 1 - ds) // slice_step + 1
-            for i, item in enumerate(ic(ds)):
-                if i % slice_step != 0:
-                    continue
-                if c <= 0:
-                    break
-                yield item
-                c -= 1
-
-        return _w
-
-
-def ic_from_generator(gen_func):
-    def _w(start: int):
-        for item in gen_func():
-            if start > 0:
-                start -= 1
-                continue
-            yield item
-
-    return _w
-
-
-def ic_from_iterable(iterable):
-    def _w(start: int):
-        for item in iterable:
-            if start > 0:
-                start -= 1
-                continue
-            yield item
-
-    return _w
-
-
-def iterator_from_iterable_creator(ic):
-    def _w(start: int):
-        for item in ic():
-            if start > 0:
-                start -= 1
-                continue
-            yield item
-
-    return _w
-
-
-def zip_iterator_iterable(*ic):
-    def _w(start: int):
-        yield from zip(*[a(start) for a in ic])
-
-    return _w
-
-
-def concat_iterator_iterable(*ic):
-    def _w(start: int):
-        for a in ic:
-            for item in a(0):
-                if start > 0:
-                    start -= 1
-                    continue
-                yield item
-
-    return _w
+from flowder.source.depend_func import DependFunc
+from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
+    ic_from_generator, ic_concat
 
 
 class PipeLine:
@@ -128,6 +27,8 @@ class PipeLine:
     def __or__(self, other):
         if isinstance(other, PipeLine):
             return self._concat(other)
+        else:
+            raise TypeError(f"invalid pipe type: {other}")
 
     def _concat(self, other):
         assert isinstance(other, PipeLine)
@@ -145,13 +46,18 @@ class PipeLine:
 
 class Mapped(PipeLine):
     def __init__(self, transform, dependencies):
+        """
+
+        :param transform: func or depend_func
+        :param dependencies: transformのdependenciesに追加される
+        """
         assert type(dependencies) == list
         if isinstance(transform, DependFunc):
-            self.transform = transform.func
             d = transform.dependencies + dependencies
+            transform = transform.func
         else:
-            self.transform = transform
             d = dependencies
+        self.transform = transform
 
         def _application(source, key):
             """
@@ -193,13 +99,18 @@ class Mapped(PipeLine):
 
 class Filtered(PipeLine):
     def __init__(self, pred, dependencies):
+        """
+
+        :param pred: func or depend_func
+        :param dependencies: predのdependenciesに追加される
+        """
         assert type(dependencies) == list
         if isinstance(pred, DependFunc):
-            self.pred = pred.func
             d = pred.dependencies + dependencies
+            pred = pred.func
         else:
-            self.pred = pred
             d = dependencies
+        self.pred = pred
 
         def _application(source, key):
             assert isinstance(source, Source)
@@ -227,12 +138,24 @@ class Filtered(PipeLine):
 
 
 def mapped(transform, dependencies=None) -> Mapped:
+    """
+    Map Pipeline objectを作成
+    :param transform:
+    :param dependencies:
+    :return:
+    """
     if dependencies is None:
         dependencies = []
     return Mapped(transform, dependencies)
 
 
 def filtered(pred, dependencies=None) -> Filtered:
+    """
+    Filter Pipeline objectを作成
+    :param pred:
+    :param dependencies:
+    :return:
+    """
     if dependencies is None:
         dependencies = []
     return Filtered(pred, dependencies)
@@ -241,14 +164,15 @@ def filtered(pred, dependencies=None) -> Filtered:
 def zipped(*sources):
     for s in sources:
         assert isinstance(s, Source)
-    return Source(zip_iterator_iterable(*[s._raw for s in sources]), parents=list(sources))
+    return Source(ic_zip(*[s._raw for s in sources]), parents=list(sources))
 
 
-def _dict_to_transform(transform_dict):
+def _pattern_to_transform(transform_dict):
     def wrapper(data):
         if isinstance(data, tuple) or isinstance(data, list):
+            assert len(data) == len(transform_dict), "pattern mapping must has same length as data"
             return tuple(
-                transform_dict[i](data[i]) if i in transform_dict else data[i]
+                transform_dict[i](data[i]) if transform_dict[i] is not None else data[i]
                 for i in range(len(data))
             )
         elif isinstance(data, dict):
@@ -260,11 +184,12 @@ def _dict_to_transform(transform_dict):
     return wrapper
 
 
-def _dict_to_filter(filter_dict):
+def _pattern_to_filter(filter_dict):
     def wrapper(data):
         if isinstance(data, tuple) or isinstance(data, list):
+            assert len(data) == len(filter_dict), "pattern filtering must has same length as data"
             return all(
-                filter_dict[i](data[i]) if i in filter_dict else True
+                filter_dict[i](data[i]) if filter_dict[i] is not None else True
                 for i in range(len(data))
             )
         elif isinstance(data, dict):
@@ -272,23 +197,6 @@ def _dict_to_filter(filter_dict):
                 filter_dict[key](data[key]) if key in filter_dict else True
                 for key in data
             )
-
-    return wrapper
-
-
-class DependFunc:
-    def __init__(self, func, dependencies):
-        self.func = func
-        self.dependencies = dependencies
-        assert type(dependencies) == list
-
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
-
-
-def depend(*dependencies):
-    def wrapper(f):
-        return DependFunc(f, list(dependencies))
 
     return wrapper
 
@@ -330,14 +238,14 @@ class Source:
         l = None
         if self.has_length and other.has_length:
             l = len(self) + len(other)
-        return Source(concat_iterator_iterable(self._raw, other._raw), parents=[self, other], length=l)
+        return Source(ic_concat(self._raw, other._raw), parents=[self, other], length=l)
 
     def __mul__(self, other):  # zip Srouce
         assert isinstance(other, Source)
         l = None
         if self.has_length and other.has_length:
             l = min(len(self), len(other))
-        return Source(zip_iterator_iterable(self._raw, other._raw), parents=[self, other], length=l)
+        return Source(ic_zip(self._raw, other._raw), parents=[self, other], length=l)
 
     def __iter__(self):
         yield from self._raw(0)
@@ -348,6 +256,10 @@ class Source:
 
     @property
     def hash(self):
+        """
+        親のhashと自身のdependenciesからhashを計算してキャッシュする
+        :return:
+        """
         if self._hash is None:
             hs = 0
             if self.parents is not None:
@@ -360,48 +272,59 @@ class Source:
         return self._hash
 
     def __len__(self):
-        # TODO: 常に定義されているとlist()などがlen()を呼んでしまい落ちる
         if self.has_length:
             return self.length
         else:
             raise TypeError("This Source has not been defined length.")
 
     def __or__(self, other):
+        """
+        Pipeにデータを流す
+        対象は Pipe or pattern(tuple/list/dict) or Callable
+        Callableは暗黙にMapとみなす
+        :param other:
+        :return:
+        """
         if isinstance(other, PipeLine):
             return other._apply(self, key=None)
         if type(other) == tuple:
-            assert all(a is None or isinstance(a, PipeLine) for a in other)
+            assert all(a is None or isinstance(a, PipeLine) or callable(a) for a in other)
             s = self
             for i, pipe in enumerate(other):
                 if pipe is not None:
+                    if not isinstance(pipe, PipeLine):
+                        pipe = mapped(pipe)
                     s = pipe._apply(s, key=i)
             return s
         if type(other) == dict:
-            assert all(a is None or isinstance(a, PipeLine) for a in other.values())
+            assert all(a is None or isinstance(a, PipeLine) or callable(a) for a in other.values())
             s = self
             for key, pipe in other.items():
                 if pipe is not None:
+                    if not isinstance(pipe, PipeLine):
+                        pipe = mapped(pipe)
                     s = pipe._apply(s, key=key)
             return s
         raise TypeError("invalid pipe operation")
 
     def map(self, transform, dependencies=None):
         """
-        if transform is dict, transform will convert only data on the key of dict
+        if transform is dict,list or tuple,
+        transform will convert only data on the key of dict/index of list(tuple)
 
-        :param transform: function or dict
+        :param transform: function or dict, list, tuple
         :param dependencies:
         :return:
         """
-        if isinstance(transform, dict):
-            transform = _dict_to_transform(transform)
+        if type(transform) in [dict, list, tuple]:
+            transform = _pattern_to_transform(transform)
 
         return Source(ic_map(self._raw, transform),
                       parents=[self], length=self.length, dependencies=dependencies)
 
     def filter(self, pred, dependencies=None):
-        if isinstance(pred, dict):
-            pred = _dict_to_filter(pred)
+        if type(pred) in [dict, list, tuple]:
+            pred = _pattern_to_filter(pred)
         return Source(ic_filter(self._raw, pred), parents=[self], dependencies=dependencies)
 
     def cache(self, name, cache_dir=".tmp", clear_cache="no", check_only=False, caller_file_name=None):
@@ -497,33 +420,6 @@ class Source:
             return next(iter(self._raw(item)))
 
 
-def lines(path):
-    path = pathlib.Path(path)
-    assert path.exists()
-
-    hash = hashlib.sha1()
-    with open(path, 'rb') as f:
-        while True:
-            chunk = f.read(2048 * hash.block_size)
-            if len(chunk) == 0:
-                break
-            hash.update(chunk)
-
-    d = hash.hexdigest()
-
-    with path.open(encoding="utf-8") as f:
-        length = sum(1 for _ in f)
-
-    def _gen():
-        with path.open(encoding="utf-8") as f:
-            for line in f:
-                yield line[:-1]
-
-    obs = iterator_from_iterable_creator(_gen)
-
-    return Source(obs, length=length, dependencies=[d])
-
-
 def _calc_args_hash(args):
     hs = 0
     for obj in args:
@@ -537,34 +433,3 @@ def _calc_args_hash(args):
                 f"{obj} is not hashable.\nall arguments are needed to be hashable for caching."
             )
     return hs
-
-#
-#     def _str(self):
-#         parents = [
-#             (str(field.target_source) + f">>({field.name})").split("\n")
-#             for field in self.fields
-#         ]
-#         if len(parents) == 1:
-#             p = parents[0]
-#             p[-1] += "-" + "[Dataset]"
-#             return "\n".join(p)
-#         max_width = max(len(p_lines[0]) for p_lines in parents)
-#         pads = [
-#             [
-#                 (" " * (max_width - len(line))) + line
-#                 for line in p_lines
-#             ]
-#             for p_lines in parents
-#         ]
-#         p_line_counts = [len(it) for it in pads]
-#
-#         tails = ["┐"]
-#         for pl in p_line_counts:
-#             for _ in range(pl - 1):
-#                 tails.append("│")
-#             tails.append("┤")
-#         tails = tails[:-2]
-#         tails.append("┴" + "[Dataset]")
-#         lines = [line for p_lines in pads for line in p_lines]
-#         res = [line + tail for line, tail in zip(lines, tails)]
-#         return "\n".join(res)

@@ -1,14 +1,8 @@
 {
-  "test/source_test.py": true,
   "test/source_test.py::Test::test_filter": true,
   "test/source_test.py::Test::test_map": true,
   "test/source_test.py::Test::test_simple_length": true,
-  "test/source_test.py::TestCache::test_file_cache": true,
-  "test/source_test.py::TestPipe::test_decorator": true,
-  "test/source_test.py::TestPipe::test_filter": true,
-  "test/source_test.py::TestPipe::test_mapped": true,
   "test/source_test.py::TestPipe::test_mapped_2": true,
-  "test/source_test.py::TestPipe::test_mapped_dict": true,
   "test/source_test.py::TestPipe::test_partial_mapped": true,
   "test/source_test.py::TestPipe::test_simple": true
 }
