@@ -519,6 +519,12 @@ class Source:
                 assert 0 <= item < self.length, "index out of range"
             return next(iter(self._raw(item)))
 
+    def __rshift__(self, other):
+        if isinstance(other, Aggregator):
+            other.feed_data(self)
+        else:
+            raise TypeError("invalid aggregate operation")
+
 
 def _calc_args_hash(args):
     hs = 0
@@ -533,3 +539,11 @@ def _calc_args_hash(args):
                 f"{obj} is not hashable.\nall arguments are needed to be hashable for caching."
             )
     return hs
+
+
+class Aggregator:
+    def __init__(self, name):
+        self.name = name
+
+    def feed_data(self, data: Source):
+        raise NotImplementedError()

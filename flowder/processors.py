@@ -3,25 +3,12 @@ import pathlib
 import pickle
 from collections import OrderedDict, Counter
 
+from flowder.source.base import Aggregator
 from flowder.utils import map_pipe
 
 from flowder.source import Source
 from torchtext.vocab import Vocab
 from tqdm import tqdm
-
-
-class Aggregator:
-    def __init__(self, name):
-        self.name = name
-
-    def __rrshift__(self, other):
-        if isinstance(other, Source):
-            self.feed_data(other)
-        else:
-            raise TypeError("invalid aggregate operation")
-
-    def feed_data(self, data: Source):
-        raise NotImplementedError()
 
 
 class VocabBuilder(Aggregator):

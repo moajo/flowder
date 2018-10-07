@@ -2,7 +2,7 @@
 import hashlib
 import pathlib
 
-from flowder.source.base import DependFunc, mapped, Mapped, Source, ic_from_array, filtered
+from flowder.source.base import mapped, Source, ic_from_array, filtered
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
 
 
@@ -12,6 +12,7 @@ def map_pipe(dependencies=None):
     :param dependencies:
     :return:
     """
+
     def wrapper(f):
         return mapped(f, dependencies)
 
@@ -24,6 +25,7 @@ def filter_pipe(dependencies=None):
     :param dependencies:
     :return:
     """
+
     def wrapper(f):
         return filtered(f, dependencies)
 
@@ -65,22 +67,22 @@ def lines(path):
     path = pathlib.Path(path)
     assert path.exists()
 
-    hash = hashlib.sha1()
+    hs = hashlib.sha1()
     with open(path, 'rb') as f:
         while True:
-            chunk = f.read(2048 * hash.block_size)
+            chunk = f.read(2048 * hs.block_size)
             if len(chunk) == 0:
                 break
-            hash.update(chunk)
+            hs.update(chunk)
 
-    d = hash.hexdigest()
+    d = hs.hexdigest()
 
     with path.open(encoding="utf-8") as f:
         length = sum(1 for _ in f)
 
     def _gen():
-        with path.open(encoding="utf-8") as f:
-            for line in f:
+        with path.open(encoding="utf-8") as ff:
+            for line in ff:
                 yield line[:-1]
 
     obs = ic_from_generator(_gen)
