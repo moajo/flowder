@@ -1,4 +1,5 @@
 # flowder
+
 simple (fast) dataloader for machine learning.
 
 # installation
@@ -8,6 +9,7 @@ pip install git+https://github.com/moajo/flowder.git
 ```
 
 ### require
+
 - Python 3.6
 - tqdm
 - pytorch(optional)
@@ -15,80 +17,123 @@ pip install git+https://github.com/moajo/flowder.git
 - PIL(optional)
 
 # example
+
 ```python
-from flowder import file, zip_source, directory
+from flowder import lines, mapped, directory, filtered
+from flowder.utils.csv import csv
+from flowder.utils.image import to_image
 
 # create data source
-lines_source = file("text.txt").lines()
+lines_source = lines("text.txt")
+
+# map with the pipe like unix shell
+line_length = lines_source | mapped(lambda l: len(l))
 
 # data source is iterable
-for line in lines_source:
-  print(line)
+for line in lines_source[:10]:
+    print(line)
 
-# support zip/map/filter
-for text, annotation in zip_source(lines_source, file("anno.csv").csv()):
-  print(text, annotation)
+# zip with operator '*'
+for line, l in lines_source * line_length:
+    print(line, "length:", l)
+
+# supported csv/json/...
+for annotation in csv("anno.csv"):
+    print(annotation)
 
 # load directory files as image
-image_source = directory("imgs").filter(lambda x: x[-4:]==".png").image()
+image_source = directory("imgs") | filtered(lambda x: x[-4:] == ".png") | to_image()
 
 # index access
 first_img = image_source[0]
+
 ```
 
 # DataModel
+
 ## Source
-Sourceは反復可能なオブジェクトで、map/filterなどの演算によって連鎖します。
-これらの計算はすべて遅延評価され、必要な部分のみがメモリ上に読み込まれます。
+
+反復可能なオブジェクト。map/filter などの演算によって連鎖します。
+これらの計算は基本的に遅延評価され、必要な部分だけがメモリ上にロードされます。
+
 ```python
-source = file("big_data.txt").lines().map(complex_process).filter(predicate)
+from flowder import lines, mapped
+source = lines("big_data.txt") | mapped(complex_process) | filtered(predicate)
 
-# 計算結果をファイルにキャッシュできます。計算は最初にiterが呼ばれたタイミングで行われます。
-file_cache = source.file_cache("processed_data")
+for data in source:
+  pass # 値はイテレーション毎に遅延評価されます
 
-# file_cache.load()　# 手動で計算のタイミングを指定できます
+# ファイルにキャッシュを作成できます。Sourceは連鎖中のすべてのパラメータからhashを計算し、一致性を確認します。
+file_cache = source.cache("processed_data")
 
 for data in file_cache:
-  pass # 2回目の実行以降は、キャッシュの値が使用されます
-```
-## Field
-対象となるSourceを指定し、値全体の統計量を計算するような前処理や、それを使ったデータの変換を管理します。
-Fieldオブジェクトはデータ項目ごとに用意され、マージして後述するDatasetオブジェクトを作成します。
-TextFieldはテキスト用のFieldのプリセットで、語彙生成とキャッシュ、sos/eosの挿入とindex化ができます。
-```python
-train_en_loader = file("train.en").lines()
-train_ja_loader = file("train.ja").lines()
-en_vocab_processor = BuildVocab(
-    cache_file=".tmp/cache_en",
-    max_size=VOCAB_SIZE,
-)
-ja_vocab_processor = BuildVocab(
-    additional_special_token=[sos_token, eos_token],
-    cache_file=".tmp/cache_ja",
-    max_size=VOCAB_SIZE,
-)
-src = TextField("src",
-                train_en_loader,
-                vocab_processor=en_vocab_processor)
-trg = TextField("trg",
-                train_ja_loader,
-                eos_token=eos_token,
-                sos_token=sos_token,
-                vocab_processor=ja_vocab_processor)
+  pass # キャッシュの値が使用されます
 ```
 
-## Dataset
-Datasetは複数のFieldを束ね、Sourceの依存グラフをもとに計算を最適化します。
+## PipeLine
+Sourceへの変換を表すオブジェクトです。 `|` 演算子でSourceを変換します。
+
 ```python
-ds = create_dataset(len(train_en_loader), src, trg)
-ds.preprocess()# Fieldの前処理の実行
-# ds.map(func).filter(pred) # DatasetはSourceでもあります
+from flowder import mapped, filtered, from_items, flat_mapped, from_array
+
+source1 = from_items(*range(100))  # 0,1,2,3,,,
+
+# Sourceを変換
+double = lambda a: a * 2
+mapped_source = source1 | mapped(double)
+for v in mapped_source:
+    print(v)  # 0,2,4,6,,,
+
+# フィルタ
+odd = lambda a: a % 2 == 1
+mapped_source = source1 | filtered(odd)
+for v in mapped_source:
+    print(v)  # 1,3,5,7,,,
+
+# PipeLineの連結
+pipe = mapped(double) | filtered(lambda a: a > 20)
+for v in source1 | pipe:
+    print(v)  # 20,22,24,,,
+
+# 流れるデータの一部をフィルタ
+data = source1 | mapped(lambda i: {"index": i, "is_odd": i % 2 == 1})
+for v in data | {"is_odd": filtered(lambda is_odd: not is_odd)}:
+    print(v["index"])  # 0,2,4,6,,,
 ```
+
+## Aggregator
+
+```python
+from flowder.pipes import split, add_eos, add_sos
+from flowder.processors import VocabBuilder
+
+from flowder import lines
+
+# スペース区切りのテキストソース
+en_source = lines("train.en") | split()
+ja_source = lines("train.ja") | split()
+
+# Vocabの構築
+en = VocabBuilder("src", max_size=24000)
+ja = VocabBuilder("trg", max_size=24000)
+en_source >> en
+ja_source >> ja
+
+# wordのindexへの変換、その他の前処理
+en_source |= en.numericalizer
+ja_source |= ja.numericalizer | add_eos() | add_sos()
+
+for en, ja in en_source * ja_source:
+    print(en, ja)
+```
+
 ## Iterator
+
 マルチプロセスで非同期にデータをロードするイテレータを提供します。
 バッチの作成や前処理を別プロセスで行うので、メインプロセスのイテレーションが高速化します。
 また、開始時にデータをまとめてロードする必要がなくなります。
-BucketIteratorはシーケンスデータ用のイテレータで、バッチ内のシーケンスの長さが近くなるようにして計算効率を上げます。
+BucketIterator はシーケンスデータ用のイテレータで、バッチ内のシーケンスの長さが近くなるようにして計算効率を上げます。
+
 ```python
 batch_transforms = [
     sort(sort_key),
@@ -113,13 +158,15 @@ test_iter = flowder.create_iterator(
 ```
 
 # benchmark
-前処理：テキストをトークナイズしてwordIndexに変換、<sos>/<eos>の挿入、バッチ内のデータの長さをできるだけ揃えて(BucketIterator)ソートしてpadding
-Vocabは事前に作成済み
-flowderは事前読み込みなしで学習中に非同期でデータ生成
-torchtextは途中まで前処理済みデータをpickleでキャッシュして、学習前にロードする
+
+前処理：テキストをトークナイズして wordIndex に変換、<sos>/<eos>の挿入、バッチ内のデータの長さをできるだけ揃えて(BucketIterator)ソートして padding
+Vocab は事前に作成済み
+flowder は事前読み込みなしで学習中に非同期でデータ生成
+torchtext は途中まで前処理済みデータを pickle でキャッシュして、学習前にロードする
 学習タスクは比較の安定性のため、疑似タスクとしてバッチ毎に`time.sleep(0.01)`している
 
 ### flowder
+
 ```
 [flowder.Dataset]preprocess is not needed for any fields
 train epoch:1: 100%|███████████████████████████████████████████| 2222/2222 [00:24<00:00, 90.34it/s]
@@ -135,7 +182,9 @@ TEST[epoch:5]: 100%|████████████████████
 iteration-time: 118.43958020210266
 88.32s user 10.04s system 76% cpu 2:08.31 total
 ```
+
 ### torchtext
+
 ```
 train epoch:1: 100%|███████████████████████████████████████████| 2222/2222 [00:31<00:00, 70.99it/s]
 TEST[epoch:1]: 100%|███████████████████████████████████████████████| 10/10 [00:00<00:00, 65.46it/s]
@@ -152,46 +201,45 @@ iteration-time: 155.81213545799255s
 ```
 
 # more example
+
 ```python
-"""`file1.txt` is tab sepalated parallel corpus
-世界 World
-こんにちは hello
-"""
+from flowder.pipes import select, add_sos, add_eos
+from flowder.processors import VocabBuilder
 
-from flowder import file
+from flowder import lines, filtered
+from flowder.source.depend_func import depend
 
-# open file and get lines iterator
-source = file("data_foreach_line.txt").lines()
 
-for line in source:
-  print(line) #print 2 line
+def filter_by_data_length(max_data_length):
+    # 依存変数の指定
+    @depend(max_data_length)
+    def wrapper(k):
+        return 0 < len(k) <= max_data_length
 
-split = source.split("\t") # convert item: str->tuple(str)
-ja = split.item[0] # convert for each item
-en = split.item[1]
+    return wrapper
 
-for sent in ja:
-  print(sent) # 世界->こんにちは
 
-vocab = BuildVocab(
-  additional_special_token=["<sos>"],
-  cache_file=".tmp/en_vocab"
-) # custom vocab builder with auto cacheing
+train_src, train_trg = lines("train_src.txt"), lines("train_trg.txt")
+dev_src, dev_trg = lines("dev_src.txt"), lines("dev_trg.txt")
 
-src = TextField("src", ja, tokenizer=lambda s:s.split()) # custom tokenizer
-trg = TextField("trg", en, lowercase=True, vocab=vocab, sos_token="<sos>") # there are more options
+# pattern matching pipeline
+filt = filtered(filter_by_data_length(50))
+filtered_data = (train_src * train_trg) | (split(), split()) | (filt, filt)
+filtered_data = filtered_data.cache("name")
 
-data_size = len(ja) # obtain length
-ds = create_dataset(data_size, src, trg)
+# build vocab
+src = VocabBuilder("src", max_size=24000)
+trg = VocabBuilder("trg", max_size=24000)
+(filtered_data | select(0)) >> src
+(filtered_data | select(1)) >> trg
 
-it = flowder.create_iterator( # loading data async in background process
-    ds,
-    batch_size=10,
-    shuffle=True,
-)
-
-for data in it:
-  print(data) # {"src": [2], "trg": [2]}
-  print([vocab.itos[i] for i in data["trg]]) # ["world"]
+# preprocess pipeline
+train_src = filtered_data | select(0) | src.numericalizer
+train_trg = filtered_data | select(1) | trg.numericalizer | add_sos() | add_eos()
+train_data = train_src * train_trg
+val_data = (dev_src * dev_trg) | \
+           (split(), split()) | \
+           (src.numericalizer, trg.numericalizer) | \
+           (None, (add_sos() | add_eos()))
 
 ```
