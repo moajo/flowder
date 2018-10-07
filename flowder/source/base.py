@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
-    ic_from_generator, ic_concat
+    ic_from_generator, ic_concat, ic_flat_map
 
 
 class PipeLine:
@@ -18,11 +18,11 @@ class PipeLine:
     依存情報も保持する
     """
 
-    def __init__(self, applications, dependencies):
-        assert type(dependencies) == list
+    def __init__(self, applications):
+        # assert type(dependencies) == list
         assert type(applications) == list
         self.applications = applications
-        self.dependencies = dependencies
+        # self.dependencies = dependencies
 
     def __or__(self, other):
         if isinstance(other, PipeLine):
@@ -32,7 +32,7 @@ class PipeLine:
 
     def _concat(self, other):
         assert isinstance(other, PipeLine)
-        return PipeLine(self.applications + other.applications, self.dependencies + other.dependencies)
+        return PipeLine(self.applications + other.applications)
 
     def _apply(self, source, key):
         assert isinstance(source, Source)
@@ -40,8 +40,61 @@ class PipeLine:
         for ap in self.applications:
             source = ap(source, key)
 
-        source.dependencies += self.dependencies
+        # source.dependencies += self.dependencies
         return source
+
+
+class FlatMapped(PipeLine):
+    def __init__(self, transform, dependencies):
+        """
+
+        :param transform: func or depend_func
+        :param dependencies: transformのdependenciesに追加される
+        """
+        assert type(dependencies) == list
+        if isinstance(transform, DependFunc):
+            d = transform.dependencies + dependencies
+            transform = transform.func
+        else:
+            d = dependencies
+        self.transform = transform
+
+        def _application(source, key):
+            """
+
+            :param source:
+            :param key: srcのこのkeyの部分だけをmapする
+            :return:
+            """
+            assert isinstance(source, Source)
+            if key is None:
+                return source.flat_map(transform, dependencies=d)
+            else:  # tuple of source
+                def _m(data):
+                    if type(data) in [tuple, list]:
+                        assert type(key) == int
+                        assert len(data) > key, f"invalid tuple mapping key(out of range): " \
+                                                f"\n\tkey: {key}" \
+                                                f"\n\tlen(data): {len(data)}"
+                        return tuple(
+                            transform(data[i]) if i == key else data[i]
+                            for i in range(len(data))
+                        )
+                    elif type(data) == dict:
+                        assert key in data, f"invalid dict mapping key(key not found): " \
+                                            f"\n\tkey: {key}" \
+                                            f"\n\tdata.keys(): {data.keys()}"
+                        return {
+                            k: transform(data[k]) if k == key else data[k]
+                            for k in data
+                        }
+
+                return source.map(_m)
+
+        super(FlatMapped, self).__init__([_application])
+
+    def __call__(self, *args, **kwargs):
+        return self.transform(*args, **kwargs)
 
 
 class Mapped(PipeLine):
@@ -68,7 +121,7 @@ class Mapped(PipeLine):
             """
             assert isinstance(source, Source)
             if key is None:
-                return source.map(transform)
+                return source.map(transform, dependencies=d)
             else:
                 def _m(data):
                     if type(data) in [tuple, list]:
@@ -89,9 +142,9 @@ class Mapped(PipeLine):
                             for k in data
                         }
 
-                return source.map(_m)
+                return source.map(_m, dependencies=d)
 
-        super(Mapped, self).__init__([_application], d)
+        super(Mapped, self).__init__([_application])
 
     def __call__(self, *args, **kwargs):
         return self.transform(*args, **kwargs)
@@ -116,7 +169,7 @@ class Filtered(PipeLine):
             assert isinstance(source, Source)
 
             if key is None:
-                return source.filter(pred)
+                return source.filter(pred, dependencies=d)
             else:
                 def _m(data):
                     if type(data) == dict:
@@ -129,12 +182,24 @@ class Filtered(PipeLine):
                                                 f"\n\tlen(data): {len(data)}"
                     return pred(data[key])
 
-                return source.filter(_m)
+                return source.filter(_m, dependencies=d)
 
-        super(Filtered, self).__init__([_application], d)
+        super(Filtered, self).__init__([_application])
 
     def __call__(self, *args, **kwargs):
         return self.pred(*args, **kwargs)
+
+
+def flat_mapped(convert, dependencies=None) -> FlatMapped:
+    """
+    FlatMap Pipeline objectを作成
+    :param convert:
+    :param dependencies:
+    :return:
+    """
+    if dependencies is None:
+        dependencies = []
+    return FlatMapped(convert, dependencies)
 
 
 def mapped(transform, dependencies=None) -> Mapped:
@@ -307,6 +372,12 @@ class Source:
             return s
         raise TypeError("invalid pipe operation")
 
+    def flat_map(self, converter, dependencies=None):
+        return Source(
+            ic_flat_map(self._raw, converter),
+            parents=[self],
+            dependencies=dependencies)
+
     def map(self, transform, dependencies=None):
         """
         if transform is dict,list or tuple,
@@ -414,9 +485,38 @@ class Source:
         if self.data is not None:
             return self.data[item]
         if isinstance(item, slice):
-
-            return Source(ic_slice(self._raw, item), parents=[self])
+            if self.has_length:
+                stop = item.stop if item.stop is not None else self.length
+                start = item.start if item.start is not None else 0
+                step = item.step if item.step is not None else 1
+                assert step > 0
+                while stop < 0:
+                    stop += self.length
+                while start < 0:
+                    start += self.length
+                stop = min(stop, self.length)
+                start = min(start, stop)
+                return Source(
+                    ic_slice(self._raw, slice(start, stop, step)),
+                    length=(stop - start) // step,
+                    parents=[self])
+            else:
+                if item.start is not None and item.start < 0 or \
+                        item.stop is not None and item.stop < 0:
+                    raise IndexError(
+                        "negative index does not supported on the source that has no length"
+                    )
+                return Source(ic_slice(self._raw, item), parents=[self])
         else:
+            if not self.has_length:
+                if item < 0:
+                    raise IndexError(
+                        "negative index does not supported on the source that has no length"
+                    )
+            else:
+                if item < 0:
+                    item += self.length
+                assert 0 <= item < self.length, "index out of range"
             return next(iter(self._raw(item)))
 
 

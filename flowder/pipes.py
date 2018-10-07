@@ -50,6 +50,37 @@ def split(c=None) -> Mapped:
     return wrapper
 
 
+def select(key) -> Mapped:
+    """
+    指定したkeyの値にmapする
+    :param key:
+    :return:
+    """
+
+    @map_pipe()
+    def wrapper(s):
+        return s[key]
+
+    return wrapper
+
+
+def to_dict(*keys):
+    """
+    tupleをkeysとzipしてdictに変換する
+    :param keys:
+    :return:
+    """
+
+    @map_pipe()
+    def wrapper(s):
+        return {
+            k: v
+            for k, v in zip(keys, s)
+        }
+
+    return wrapper
+
+
 def add_sos(sos_token=2) -> Mapped:
     return mapped(_AddToken(sos_token, head=True))
 

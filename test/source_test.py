@@ -2,10 +2,7 @@
 import unittest
 from pathlib import Path
 
-from rx import Observable
-from tqdm import tqdm
-
-from flowder.pipes import split
+from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered
 from flowder.source.depend_func import depend
@@ -67,6 +64,20 @@ class TestSource(unittest.TestCase):
         self.assertEqual([4, 6, 8], list(s1[4:10:2]))
         self.assertEqual([4, 7], list(s1[4:10:3]))
         self.assertEqual([4, 7, 10], list(s1[4:11:3]))
+
+        self.assertEqual(17, s1[-3])
+        self.assertEqual([], list(s1[999:]))
+        self.assertEqual([17, 18, 19], list(s1[-3:]))
+        self.assertEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], list(s1[:-10]))
+        for i in range(-10, 30):
+            self.assertEqual(list(range(20)), list(s1[:i]) + list(s1[i:]))
+
+    def test_flat_map(self):
+        s1 = from_items(1, 2, 3)
+        m = s1.flat_map(lambda a: range(a))
+        self.assertFalse(m.has_length)
+
+        self.assertEqual([0, 0, 1, 0, 1, 2], list(m))
 
     def test_map(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -290,6 +301,26 @@ class TestPipe(unittest.TestCase):
         self.assertTrue(s1.has_length)
         self.assertEqual([1, 2, 3, 4, 5], list(s1))
         self.assertEqual(1, s1[0])
+
+    def test_select(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = from_items(1, 1, 1, 1, 1)
+
+        m = zipped(s1, s2) | mapped(lambda a: {"a": a[0], "b": a[1]})
+        r = m | select("a")
+        self.assertEqual([1, 2, 3, 4, 5], list(r))
+        r = m | select("b")
+        self.assertEqual([1, 1, 1, 1, 1], list(r))
+
+    def test_to_dict(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = from_items(1, 1, 1, 1, 1)
+
+        m = zipped(s1, s2) | to_dict("a", "b")
+        r = m | select("a")
+        self.assertEqual([1, 2, 3, 4, 5], list(r))
+        r = m | select("b")
+        self.assertEqual([1, 1, 1, 1, 1], list(r))
 
 
 class TestCache(unittest.TestCase):

@@ -92,6 +92,15 @@ def ic_concat(*ic):
     return _w
 
 
+def ic_flat_map(ic, converter):
+    def gen():
+        for seq in ic(0):
+            for item in converter(seq):
+                yield item
+
+    return ic_from_generator(gen)
+
+
 def ic_slice(ic: IterableCreator, s: slice) -> IterableCreator:
     """
     slice icの構成

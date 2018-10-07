@@ -115,7 +115,13 @@ class VocabBuilder(Aggregator):
     def numericalize(self, tokenized_sentence):
         return [self.vocab.stoi[word] for word in tokenized_sentence]
 
-    def pipe_numericalize(self):
+    @property
+    def numericalizer(self):
+        """
+        Vocabに応じてwordをindexに変換するPipe
+        :return:
+        """
+
         @map_pipe()
         def w(tokenized_sentence):
             return self.numericalize(tokenized_sentence)
