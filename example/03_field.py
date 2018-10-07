@@ -1,10 +1,13 @@
-from flowder.fields import TextField
-from flowder import zip_source, file, create_dataset
+from flowder.pipes import split, to_dict, select
+from flowder.processors import VocabBuilder
+from flowder.source.base import mapped
 
-ja = file("data/kftt.ja").lines()
-en = file("data/kftt.en").lines()
+from flowder.utils import lines
 
-zipped = zip_source(ja, en)
+ja = lines("data/kftt.ja")
+en = lines("data/kftt.en")
+
+zipped = ja * en
 
 assert len(zipped) == len(ja)
 
@@ -16,11 +19,12 @@ for data in zipped:
     assert isinstance(e, str)
     break
 
-f1 = TextField("ja", ja)
-f2 = TextField("en", en, numericalize=False)
-dataset = create_dataset(f1, f2)
+v = VocabBuilder("ja")
+ja >> v
+ja |= split() | v.numericalizer
+en |= split()
+dataset = ja * en | to_dict("ja", "en")
 
-dataset.preprocess()
 for example in dataset:
     assert isinstance(example, dict)
     assert "ja" in example
@@ -30,10 +34,14 @@ for example in dataset:
     assert isinstance(example["en"], list)
     assert isinstance(example["en"][0], str), "disable numericalize"
 
-special_delimiter_text = file("data/special_delimiter.txt").lines().split("|||")
-f1 = TextField("ja", special_delimiter_text.item[3])
-f2 = TextField("en", special_delimiter_text.item[4], numericalize=False)
-dataset = special_delimiter_text.create(f1, f2)
+special_delimiter_text = lines("data/special_delimiter.txt") | split("|||")
+ja = special_delimiter_text | select(3)
+en = special_delimiter_text | select(4)
+v = VocabBuilder("ja")
+ja >> v
+ja |= split() | v.numericalizer
+en |= split()
+dataset = ja * en | to_dict("ja", "en")
 for data in dataset:
     assert isinstance(data["en"], list)
     assert isinstance(data["en"][0], str)
