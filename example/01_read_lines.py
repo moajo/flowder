@@ -1,31 +1,27 @@
-from flowder.utils import file
+import pathlib
 
-files = file("data/kftt.ja")
-assert len(files) == 1, "contains just a file"
+from flowder.pipes import split, select
+from flowder.source.base import mapped
+from flowder.utils import lines
 
-lines = files.lines()
-assert len(lines) == 10, "there should be 10 lines"
+ls = lines("data/kftt.ja")
+assert len(ls) == 10, "there should be 10 lines"
 
-for s in lines:
+for s in ls:
     assert isinstance(s, str), "Source iterate the raw values"
     break
 
-for spl in lines.split():
+for s in ls | mapped(lambda x: len(x)):
+    assert isinstance(s, int), "Source iterate the raw values"
+    break
+
+for spl in ls | split():
     assert isinstance(spl, list)
     assert isinstance(spl[0], str)
     break
 
-dataset = lines.create()
-for example in dataset:
-    assert isinstance(example, dict), "as default, Dataset iterate dict instance"
-    assert "raw" in example, "as default, example key is 'raw'. because fields is not given on create()"
-
-dataset = lines.create(return_as_tuple=True)
-for example in dataset:
-    assert isinstance(example, str), "if return_as_tuple=True on create, should iterate raw value"
-
 delimiter = "|||"
-special_delimiter_text = file("data/special_delimiter.txt").lines().split(delimiter)
-for third_column in special_delimiter_text.item[3]:
+special_delimiter_text = lines("data/special_delimiter.txt") | split(delimiter)
+for third_column in special_delimiter_text | select(3):
     assert isinstance(third_column, str)
     break

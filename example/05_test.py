@@ -1,18 +1,16 @@
-from flowder.processors import AggregateProcessor
+from flowder.pipes import to_dict, select
+from flowder.processors import Aggregator
+from flowder.source import Source
 
-from flowder import Field
-from flowder.source import ArraySource, Source
-from flowder.source.util import FlatMap
+from flowder.source.base import flat_mapped
+from flowder.utils import from_array
 
-from flowder.utils import file, zip_source, create_dataset
+s = from_array(list(range(1, 11)))
 
-s = ArraySource(list(range(1, 11)))
-ds = s.create()
+for a, b in zip(s, range(1, 11)):
+    assert a == b
 
-for a, b in zip(ds, range(1, 11)):
-    assert a["raw"] == b
-
-fm = FlatMap(s, lambda n: list(range(n)))
+fm = s | flat_mapped(lambda n: list(range(n)))
 
 reference = [
     a for b in range(1, 11) for a in range(b)
@@ -20,42 +18,32 @@ reference = [
 for a, b in zip(fm, reference):
     assert a == b
 
-fm.load()
-ds = fm.create()
-for a, b in zip(fm, ds):
-    assert a == b["raw"]
-
-s = ArraySource([(n, 10 - n) for n in range(0, 11)])
-a = s.item[0]
-b = s.item[1]
-z = zip_source(a, b)
-ds = z.create()
-for a, b in zip(ds, s):
-    assert a["raw"] == b
+s = from_array([(n, 10 - n) for n in range(0, 11)])
+a = s | select(0)
+b = s | select(1)
+z = a * b
+for a, b in zip(z, s):
+    assert a == b
 
 data = []
 
 
-class TestProcess(AggregateProcessor):
+class TestProcess(Aggregator):
 
-    def data_feed(self, item):
-        data.append(item)
-
-    def __call__(self, preprocessed_value):
-        pass
+    def feed_data(self, d: Source):
+        for item in d:
+            data.append(item)
 
 
-count = TestProcess()
+count = TestProcess("test")
 
-f = Field("test", s, process=[count])
-
-ds = create_dataset(f)
-ds.preprocess()
+s >> count
+ds = s
 
 for a, b in zip(data, s):
     assert a == b
 
-s = ArraySource([n for n in range(10)])
+s = from_array([n for n in range(10)])
 sliced = s[:5]
 assert sliced[1] == s[1]
 for a, b in zip(sliced, [n for n in range(10)][:5]):
@@ -76,7 +64,7 @@ for i in range(len(s2)):
     assert s2[i] == s[i + 5]
 
 # MapTransform
-s = ArraySource([{"a": n, "b": n * 2} for n in range(10)])
+s = from_array([{"a": n, "b": n * 2} for n in range(10)])
 sm = s.map({
     "a": lambda a: a - 1,
     "b": lambda a: a + 1,
@@ -85,9 +73,9 @@ for a, b in zip(sm, [{"a": n - 1, "b": n * 2 + 1} for n in range(10)]):
     assert a == b
 
 # zip
-s1 = ArraySource([n for n in range(10)])
-s2 = ArraySource([n * 2 for n in range(10)])
-z = zip_source({"a": s1, "b": s2})
+s1 = from_array([n for n in range(10)])
+s2 = from_array([n * 2 for n in range(10)])
+z = s1 * s2 | to_dict("a", "b")
 ref = [{"a": n, "b": n * 2} for n in range(10)]
 for a, b in zip(z, ref):
     assert a == b

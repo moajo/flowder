@@ -1,10 +1,11 @@
-from flowder.utils import zip_source, file, create_dataset
-from flowder.abstracts import Field
+from flowder.pipes import split, select
+from flowder.source.base import mapped
+from flowder.utils import lines
 
-ja = file("data/kftt.ja").lines()
-en = file("data/kftt.en").lines()
+ja = lines("data/kftt.ja")
+en = lines("data/kftt.en")
 
-zipped = zip_source(ja, en)
+zipped = ja * en
 assert len(zipped) == len(ja)
 
 for data in zipped:
@@ -15,32 +16,22 @@ for data in zipped:
     assert isinstance(e, str)
     break
 
-f1 = Field("ja", ja)
-f2 = Field("en", en)
-dataset = create_dataset(f1, f2)
+dataset = ja * en | mapped(lambda t: {"ja": t[0], "en": t[1]})
 for example in dataset:
     assert isinstance(example, dict)
     assert "ja" in example
     assert isinstance(example["ja"], str)
     assert isinstance(example["en"], str)
 
-dataset = create_dataset(f1, f2, return_as_tuple=True)
-for example in dataset:
-    assert isinstance(example, tuple) and len(example) == 2
-    j, e = example
-    assert isinstance(j, str)
-    assert isinstance(e, str)
-
-special_delimiter_text = file("data/special_delimiter.txt").lines().split("|||")
-for third_column in special_delimiter_text.item[3]:
+special_delimiter_text = lines("data/special_delimiter.txt") | split("|||")
+for third_column in special_delimiter_text | select(3):
     assert isinstance(third_column, str)
     break
-f = Field("ja", special_delimiter_text.item[3])
-dataset = special_delimiter_text.create(f)
+dataset = special_delimiter_text | select(3)
 
 for japanese_column in dataset:
     pass
-for japanese_column in dataset.item["ja"]:
+for japanese_column in dataset:
     assert isinstance(japanese_column, str)
     assert "現在" in japanese_column
     break
