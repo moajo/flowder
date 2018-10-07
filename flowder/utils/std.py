@@ -6,6 +6,18 @@ from flowder.source.base import mapped, Source, ic_from_array, filtered
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
 
 
+def _cal_file_hash(path):
+    hs = hashlib.sha1()
+    with open(path, 'rb') as f:
+        while True:
+            chunk = f.read(2048 * hs.block_size)
+            if len(chunk) == 0:
+                break
+            hs.update(chunk)
+
+    return hs.hexdigest()
+
+
 def map_pipe(dependencies=None):
     """
     Map Pipeに変換するdecorator
@@ -67,15 +79,7 @@ def lines(path):
     path = pathlib.Path(path)
     assert path.exists()
 
-    hs = hashlib.sha1()
-    with open(path, 'rb') as f:
-        while True:
-            chunk = f.read(2048 * hs.block_size)
-            if len(chunk) == 0:
-                break
-            hs.update(chunk)
-
-    d = hs.hexdigest()
+    d = _cal_file_hash(path)
 
     with path.open(encoding="utf-8") as f:
         length = sum(1 for _ in f)
@@ -88,3 +92,14 @@ def lines(path):
     obs = ic_from_generator(_gen)
 
     return Source(obs, length=length, dependencies=[d])
+
+
+def directory(path):
+    # TODO calculate hash
+    path = pathlib.Path(path)
+
+    def _gen():
+        yield from path.iterdir()
+
+    obs = ic_from_generator(_gen)
+    return Source(obs)
