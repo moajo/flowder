@@ -77,7 +77,7 @@ def lines(path):
     :return:
     """
     path = pathlib.Path(path)
-    assert path.exists()
+    assert path.exists(), "file not found"
 
     d = _cal_file_hash(path)
 
