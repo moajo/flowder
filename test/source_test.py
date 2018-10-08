@@ -15,11 +15,13 @@ class TestSource(unittest.TestCase):
         self.assertFalse(s1.has_length)  # length is not given
         self.assertRaises(TypeError, lambda: len(s1))  # so, can not obtain length
         self.assertEqual([1, 2, 3, 4, 5], list(s1))
+        self.assertRaises(IndexError, lambda: s1[0])
 
         s1 = Source(lambda _: [1, 2, 3, 4, 5], length=5)  # length passed
         self.assertTrue(s1.has_length)
         self.assertEqual(5, len(s1))
         self.assertEqual([1, 2, 3, 4, 5], list(s1))
+        self.assertRaises(IndexError, lambda: s1[0])
 
     def test_simple_length(self):
         s2 = from_array([1, 2, 3, 4, 5])
@@ -208,39 +210,53 @@ class TestPipe(unittest.TestCase):
         s2 = from_items(1, 1, 1, 1, 1)
 
         z = zipped(s1, s2)
-        self.assertEqual((1, 1), z[0])
-        self.assertEqual((2, 1), z[1])
-        self.assertEqual((3, 1), z[2])
-        self.assertEqual((4, 1), z[3])
-        self.assertEqual((5, 1), z[4])
+        self.assertEqual([
+            (1, 1),
+            (2, 1),
+            (3, 1),
+            (4, 1),
+            (5, 1),
+        ], list(z))
+        # self.assertEqual((2, 1), z[1])
+        # self.assertEqual((3, 1), z[2])
+        # self.assertEqual((4, 1), z[3])
+        # self.assertEqual((5, 1), z[4])
 
         r = zipped(s1, s2) | (mapped(lambda a: a + 1), mapped(lambda a: a - 1))
-        self.assertEqual((2, 0), r[0])
-        self.assertEqual((3, 0), r[1])
-        self.assertEqual((4, 0), r[2])
-        self.assertEqual((5, 0), r[3])
-        self.assertEqual((6, 0), r[4])
+        self.assertEqual([
+            (2, 0),
+            (3, 0),
+            (4, 0),
+            (5, 0),
+            (6, 0),
+        ], list(r))
 
         r = zipped(s1, s2) | (mapped(lambda a: a + 1), None) | (mapped(lambda a: a * 2), None)
-        self.assertEqual((2 * 2, 1), r[0])
-        self.assertEqual((3 * 2, 1), r[1])
-        self.assertEqual((4 * 2, 1), r[2])
-        self.assertEqual((5 * 2, 1), r[3])
-        self.assertEqual((6 * 2, 1), r[4])
+        self.assertEqual([
+            (2 * 2, 1),
+            (3 * 2, 1),
+            (4 * 2, 1),
+            (5 * 2, 1),
+            (6 * 2, 1),
+        ], list(r))
 
         r = zipped(s1, s2) | (None, mapped(lambda a: a + 1))
-        self.assertEqual((1, 2), r[0])
-        self.assertEqual((2, 2), r[1])
-        self.assertEqual((3, 2), r[2])
-        self.assertEqual((4, 2), r[3])
-        self.assertEqual((5, 2), r[4])
+        self.assertEqual([
+            (1, 2),
+            (2, 2),
+            (3, 2),
+            (4, 2),
+            (5, 2),
+        ], list(r))
 
         r = zipped(s1, s2) | (mapped(lambda a: a + 1), None) | (None, mapped(lambda a: a * 2))
-        self.assertEqual((2, 2), r[0])
-        self.assertEqual((3, 2), r[1])
-        self.assertEqual((4, 2), r[2])
-        self.assertEqual((5, 2), r[3])
-        self.assertEqual((6, 2), r[4])
+        self.assertEqual([
+            (2, 2),
+            (3, 2),
+            (4, 2),
+            (5, 2),
+            (6, 2),
+        ], list(r))
 
     def test_mapped_dict(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -266,16 +282,19 @@ class TestPipe(unittest.TestCase):
         s2 = from_items(6, 7, 8, 9, 10)
 
         r = zipped(s1, s2) | (filtered(lambda a: a % 2 == 0), None)
+        self.assertFalse(r.random_accessible)
+        r.mem_cache()
+        self.assertTrue(r.random_accessible)
         self.assertEqual((2, 7), r[0])
         self.assertEqual((4, 9), r[1])
 
         r2 = r | (None, filtered(lambda a: a == 7))
         self.assertEqual(1, len(list(r2)))
-        self.assertEqual((2, 7), r2[0])
+        self.assertEqual((2, 7), r2.search_item(0))
 
         r2 = zipped(s1, s2) | (filtered(lambda a: a % 2 == 0), filtered(lambda a: a % 3 == 0))
         self.assertEqual(1, len(list(r2)))
-        self.assertEqual((4, 9), r2[0])
+        self.assertEqual((4, 9), r2.search_item(0))
 
     def test_decorator(self):
         k = 2

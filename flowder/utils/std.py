@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import hashlib
+import linecache
 import pathlib
 
 from flowder.source.base import mapped, Source, ic_from_array, filtered
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
+from flowder.source.random_access import ra_from_array
 
 
 def _cal_file_hash(path):
@@ -51,11 +53,11 @@ def from_array(array):
     :return:
     """
     assert type(array) in [tuple, list]
-    return Source(ic_from_array(array), length=len(array))
+    return Source(ic_from_array(array), ra_from_array(array), length=len(array))
 
 
 def from_items(*items):
-    return Source(ic_from_array(items), length=len(items))
+    return Source(ic_from_array(items), ra_from_array(items), length=len(items))
 
 
 def from_iterable(iterable):
@@ -65,7 +67,7 @@ def from_iterable(iterable):
     :param iterable:
     :return:
     """
-    return Source(ic_from_iterable(iterable))
+    return Source(ic_from_iterable(iterable), None)
 
 
 def lines(path):
@@ -89,9 +91,12 @@ def lines(path):
             for line in ff:
                 yield line[:-1]
 
+    def ra(i):
+        return linecache.getline(str(path), i + 1)[:-1]
+
     obs = ic_from_generator(_gen)
 
-    return Source(obs, length=length, dependencies=[d])
+    return Source(obs, ra, length=length, dependencies=[d])
 
 
 def directory(path):
