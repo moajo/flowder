@@ -10,7 +10,7 @@ from tqdm import tqdm
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
     ic_concat, ic_flat_map
-from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array
+from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array, ra_slice
 
 
 class PipeLine:
@@ -535,8 +535,10 @@ class Source:
                     start += self.length
                 stop = min(stop, self.length)
                 start = min(start, stop)
+                sl = slice(start, stop, step)
                 return Source(
-                    ic_slice(self._raw, slice(start, stop, step)),
+                    ic_slice(self._raw, sl),
+                    random_accessor=ra_slice(self._random_accessor, s=sl),
                     length=(stop - start) // step,
                     parents=[self])
             else:
@@ -555,7 +557,8 @@ class Source:
             else:
                 if item < 0:
                     item += self.length
-                assert 0 <= item < self.length, "index out of range"
+                if not (0 <= item < self.length):
+                    raise IndexError("index out of range")
             if not self.random_accessible:
                 raise IndexError("this source is not able to be random accessed")
             return self._random_accessor(item)

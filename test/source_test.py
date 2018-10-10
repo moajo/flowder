@@ -56,6 +56,11 @@ class TestSource(unittest.TestCase):
         self.assertEqual(1, s1[0])
         self.assertEqual(2, s1[1])
         self.assertEqual([3, 4, 5], list(s1[2:]))
+        self.assertTrue(s1[2:].random_accessible)
+        self.assertEqual(3, s1[2:][0])
+        self.assertEqual(4, s1[2:][1])
+        self.assertEqual(5, s1[2:][2])
+        self.assertRaises(IndexError, lambda: s1[2:][3])
         self.assertEqual([1, 2, 3], list(s1[:3]))
         self.assertEqual([2, 3], list(s1[1:3]))
 
@@ -63,7 +68,8 @@ class TestSource(unittest.TestCase):
         self.assertEqual(0, s1[0])
         self.assertEqual(1, s1[1])
         self.assertEqual([5, 7, 9], list(s1[5:10:2]))
-        self.assertEqual([4, 6, 8], list(s1[4:10:2]))
+        self.assertEqual([5, 7, 9], list(s1[5:10:2]))
+        self.assertEqual(6, s1[4:10:2][1])
         self.assertEqual([4, 7], list(s1[4:10:3]))
         self.assertEqual([4, 7, 10], list(s1[4:11:3]))
 

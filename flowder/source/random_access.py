@@ -35,13 +35,15 @@ def ra_map(ra1, transform):
 
     return _w
 
-# def random_access_from_iterable(iterable):
-#     ic = ic_from_iterable(iterable)
-#     return random_access_from_ic(ic)
-#
-#
-# def random_access_from_ic(ic):
-#     def _w(i):
-#         return next(iter(ic(i)))
-#
-#     return _w
+
+def ra_slice(ra, s: slice):
+    step = s.step
+    start = s.start
+    stop = s.stop
+
+    def _w(i):
+        ind = start + step * i
+        if ind >= stop:
+            raise IndexError("index out of range")
+        return ra(ind)
+    return _w
