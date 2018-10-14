@@ -3,7 +3,7 @@ import hashlib
 import linecache
 import pathlib
 
-from flowder.source.base import mapped, Source, ic_from_array, filtered
+from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
 from flowder.source.random_access import ra_from_array
 
@@ -100,11 +100,9 @@ def lines(path):
 
 
 def directory(path):
-    # TODO calculate hash
     path = pathlib.Path(path)
-
-    def _gen():
-        yield from path.iterdir()
-
-    obs = ic_from_generator(_gen)
-    return Source(obs)
+    files = list(path.iterdir())
+    obs = ic_from_array(files)
+    ra = ra_from_array(files)
+    hs = _calc_args_hash([str(a) for a in files])
+    return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
