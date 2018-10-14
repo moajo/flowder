@@ -2,9 +2,10 @@
 import json as JSON
 from pathlib import Path
 
+from flowder import ra_from_array
 from flowder.source.base import Source
 from flowder.source.iterable_creator import ic_from_array
-from flowder.utils import _cal_file_hash
+from flowder.utils.std import _cal_file_hash
 
 
 def json(path, key=None):
@@ -24,5 +25,6 @@ def json(path, key=None):
             data = JSON.load(f)[key]
         else:
             data = JSON.load(f)
-
-    return Source(ic_from_array(data), length=len(data), dependencies=[d])
+    ra = ra_from_array(data)
+    ic = ic_from_array(data)
+    return Source(ic, random_accessor=ra, length=len(data), dependencies=[d])
