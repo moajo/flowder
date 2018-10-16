@@ -1,17 +1,17 @@
 import torch
 
-from .iterator import default_sequence_collate
 from torch.nn.utils.rnn import pad_sequence
+from flowder.iterator import sequence_collate
 
 
-def default_create_batch():
+def collate():
     """
-    exampleのlistをキーごとに転置してバッチを作成する。
     数値のリストはtensorに変換する
+    exampleのlistをキーごとに転置する
     """
 
     def wrapper(batch):
-        return default_sequence_collate(batch)
+        return sequence_collate(batch)
 
     return wrapper
 

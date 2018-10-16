@@ -1,3 +1,4 @@
+import collections
 import math
 import torch
 import numpy as np
@@ -8,7 +9,7 @@ import warnings
 import functools
 
 
-def deprecated(func):
+def _deprecated(func):
     @functools.wraps(func)
     def new_func(*args, **kwargs):
         warnings.simplefilter('always', DeprecationWarning)  # turn off filter
@@ -34,7 +35,7 @@ def to_device(device):
     return wrapper
 
 
-def default_sequence_collate(batch):
+def sequence_collate(batch):
     """
     シーケンスデータに対応したdefault_collate
     listはシーケンスデータとみなす
@@ -44,11 +45,11 @@ def default_sequence_collate(batch):
     """
     if isinstance(batch[0], tuple):
         transposed = zip(*batch)
-        vs = [default_sequence_collate(samples) for samples in transposed]
+        vs = [sequence_collate(samples) for samples in transposed]
         return vs
-    if isinstance(batch[0], dict):
+    if isinstance(batch[0], collections.Mapping):
         vs = {
-            key: default_sequence_collate([d[key] for d in batch])
+            key: sequence_collate([d[key] for d in batch])
             for key in batch[0]
         }
         return vs
@@ -58,16 +59,15 @@ def default_sequence_collate(batch):
 
         if isinstance(batch[0][0], float):
             return [torch.FloatTensor(data) for data in batch]
-    vs = default_collate(batch)
-    return vs
+    return default_collate(batch)
 
 
-@deprecated
+@_deprecated
 def create_iterator(
         dataset,
         batch_size,
         shuffle,
-        batch_transforms=(default_sequence_collate,),
+        batch_transforms=(sequence_collate,),
         num_workers=1,
         pin_memory=True,
         drop_last=False,
@@ -88,12 +88,12 @@ def create_iterator(
     )
 
 
-@deprecated
+@_deprecated
 def create_bucket_iterator(
         dataset,
         batch_size,
         sort_key,
-        batch_transforms=(default_sequence_collate,),
+        batch_transforms=(sequence_collate,),
         num_workers=1,
         pin_memory=True,
         drop_last=False,
@@ -118,19 +118,53 @@ def create_bucket_iterator(
     )
 
 
-class Iterator:
+class _IteratorBase:
+    def __init__(self,
+                 batch_size,
+                 num_example,
+                 batch_transforms,
+                 prefetch_next_iterator,
+                 ):
+        assert isinstance(batch_size, int)
+        assert isinstance(num_example, int)
+        if batch_transforms is None:
+            batch_transforms = []
+        assert hasattr(batch_transforms, '__len__')
+
+        self.batch_transforms = batch_transforms
+        self.batch_size = batch_size
+        self.length = math.ceil(num_example / batch_size)
+        self.num_example = num_example
+
+        # prefetch iterator(start background loading process)
+        self._pre_fetched_next_iter = self._iter() if prefetch_next_iterator else None
+
+    def _iter(self):
+        raise NotImplementedError()
+
+    def __iter__(self):
+        if self._pre_fetched_next_iter is not None:
+            ret = self._pre_fetched_next_iter
+            self._pre_fetched_next_iter = self._iter()
+            return ret
+        return self._iter()
+
+    def __len__(self):
+        return self.length
+
+
+class Iterator(_IteratorBase):
     def __init__(self,
                  dataset,
                  batch_size,
                  shuffle,
-                 batch_transforms=(default_sequence_collate,),
+                 batch_transforms=(sequence_collate,),
                  num_workers=1,
                  pin_memory=True,
                  drop_last=False,
                  device=None,
                  prefetch_next_iterator=True,
                  ):
-        batch_transforms = batch_transforms or []
 
         def collate(batch):
             for t in batch_transforms:
@@ -148,40 +182,30 @@ class Iterator:
         )
 
         self.batch_iterator = batch_iterator
-        self.num_example = len(dataset)
-        self.batch_size = batch_size
         self.device = device
-
-        # prefetch iterator(start background loading process)
-        self._pre_fetched_next_iter = self._iter() if prefetch_next_iterator and num_workers != 0 else None
+        super(Iterator, self).__init__(
+            batch_size,
+            len(dataset),
+            batch_transforms,
+            prefetch_next_iterator and num_workers != 0
+        )
 
     def _iter(self):
+        batch_iterator_iter = iter(self.batch_iterator)
         if self.device is not None:
             p = to_device(self.device)
+
+            def _wrapper():
+                for batch in batch_iterator_iter:
+                    yield p(batch)
+
         else:
-            p = lambda a: a
-
-        batch_iterator_iter = iter(self.batch_iterator)
-
-        def _wrapper():
-            for batch in batch_iterator_iter:
-                batch = p(batch)
-                yield batch
-
+            def _wrapper():
+                yield from batch_iterator_iter
         return _wrapper()
 
-    def __iter__(self):
-        if self._pre_fetched_next_iter is not None:
-            ret = self._pre_fetched_next_iter
-            self._pre_fetched_next_iter = self._iter()
-            return ret
-        return self._iter()
 
-    def __len__(self):
-        return math.ceil(self.num_example / self.batch_size)
-
-
-class BucketIterator:
+class BucketIterator(_IteratorBase):
     """
     オーバーサンプリングしてそこから切り出すIterator
     """
@@ -191,7 +215,7 @@ class BucketIterator:
             dataset,
             batch_size: int,
             sort_key,
-            batch_transforms=(default_sequence_collate,),
+            batch_transforms=(sequence_collate,),
             num_workers=1,
             pin_memory=True,
             drop_last=False,
@@ -201,12 +225,7 @@ class BucketIterator:
             batch_length_random=True,
     ):
         assert dataset is not None
-        assert isinstance(batch_size, int)
         assert sort_key is not None
-        if batch_transforms is None:
-            batch_transforms = []
-        assert hasattr(batch_transforms, '__len__')
-        batch_transforms = batch_transforms
 
         def collate(over_batch):  # in: 100倍バッチのexample list
             try:
@@ -240,34 +259,27 @@ class BucketIterator:
             pin_memory=pin_memory,
             drop_last=drop_last,
         )
-        self.length = math.ceil(len(dataset) / batch_size)
         self.device = device
 
-        # prefetch iterator(start background loading process)
-        self._pre_fetched_next_iter = self._iter() if prefetch_next_iterator and num_workers != 0 else None
+        super(BucketIterator, self).__init__(
+            batch_size,
+            len(dataset),
+            batch_transforms=batch_transforms,
+            prefetch_next_iterator=prefetch_next_iterator and num_workers != 0
+        )
 
     def _iter(self):
+        batch_generator_iterator_iter = iter(self.batch_generator_iterator)
         if self.device is not None:
             p = to_device(self.device)
+
+            def _wrapper():
+                for batch_generator in batch_generator_iterator_iter:
+                    for batch in batch_generator:
+                        yield p(batch)
         else:
-            p = lambda a: a
-
-        batch_generator_iterator_iter = iter(self.batch_generator_iterator)
-
-        def _wrapper():
-            for batch_generator in batch_generator_iterator_iter:
-                for batch in batch_generator:
-                    batch = p(batch)
-                    yield batch
+            def _wrapper():
+                for batch_generator in batch_generator_iterator_iter:
+                    yield from batch_generator
 
         return _wrapper()
-
-    def __iter__(self):
-        if self._pre_fetched_next_iter is not None:
-            ret = self._pre_fetched_next_iter
-            self._pre_fetched_next_iter = self._iter()
-            return ret
-        return self._iter()
-
-    def __len__(self):
-        return self.length
