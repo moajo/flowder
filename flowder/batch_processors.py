@@ -2,21 +2,39 @@ import torch
 
 from torch.nn.utils.rnn import pad_sequence
 from flowder.iterator import sequence_collate
+from flowder.source.base import PipeBase
 
 
-def collate():
+class PipeFunc(PipeBase):
+    def __call__(self, arg):
+        for ap in self.applications:
+            arg = ap(arg)
+        return arg
+
+    def _concat(self, other):
+        assert isinstance(other, PipeFunc)
+        return PipeFunc(self.applications + other.applications)
+
+
+def pipe(func) -> PipeFunc:
+    return PipeFunc([func])
+
+
+def collate() -> PipeFunc:
     """
     数値のリストはtensorに変換する
     exampleのlistをキーごとに転置する
     """
 
+    @pipe
     def wrapper(batch):
         return sequence_collate(batch)
 
     return wrapper
 
 
-def sort(sort_key):
+def sort(sort_key) -> PipeFunc:
+    @pipe
     def wrapper(batch):
         try:
             return sorted(batch, key=sort_key)
@@ -26,7 +44,7 @@ def sort(sort_key):
     return wrapper
 
 
-def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
+def tensor_pad_sequence(field_names, include_length=True, padding_value=1) -> PipeFunc:
     """
     可変長シーケンス列をpaddingする。
     対象はtensorのlist。各tensorはshape[0]を長さとする。
@@ -42,6 +60,7 @@ def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
         field_names = (field_names,)
     assert isinstance(field_names, tuple)
 
+    @pipe
     def wrapper(batch):
         for field_name in field_names:
             result = pad_sequence(batch[field_name], padding_value=padding_value)

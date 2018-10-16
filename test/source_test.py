@@ -2,6 +2,8 @@
 import unittest
 from pathlib import Path
 
+from flowder.batch_processors import collate, sort, PipeFunc
+
 from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered
@@ -188,6 +190,14 @@ class TestSource(unittest.TestCase):
         m = s1.map(lambda a: a % 2 == 0, dependencies=[2])
         self.assertNotEqual(m.hash, 0)
 
+    def test_hash(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = s1 | mapped(lambda a: a * 2)
+        self.assertNotEqual(s1.hash, s2.hash)
+        s3a = s1 | mapped(lambda a: a * 2, dependencies=[2])
+        s3b = s1 | mapped(lambda a: a * 3, dependencies=[3])
+        self.assertNotEqual(s3a.hash, s3b.hash)
+
 
 class TestPipe(unittest.TestCase):
 
@@ -303,21 +313,25 @@ class TestPipe(unittest.TestCase):
         self.assertEqual((4, 9), r2.search_item(0))
 
     def test_decorator(self):
-        k = 2
+        def kk(k):
+            @depend(k)
+            def f(a):
+                return a * k
 
-        @depend(k)
-        def f(a):
-            return a * k
+            return f
 
         s1 = from_items(1, 2, 3, 4, 5)
-        m = s1 | mapped(f)
-        self.assertNotEqual(m.hash, 0)
+        m1 = s1 | mapped(kk(2))
+        m2 = s1 | mapped(kk(3))
+        self.assertNotEqual(m1.hash, m2.hash)
 
-        m = s1 | mapped(lambda a: a * k, dependencies=[k])
-        self.assertNotEqual(m.hash, 0)
+        m1 = s1 | mapped(lambda a: a * 2, dependencies=[2])
+        m2 = s1 | mapped(lambda a: a * 3, dependencies=[3])
+        self.assertNotEqual(m1.hash, m2.hash)
 
-        m = s1 | mapped(lambda a: a * k)
-        self.assertEqual(m.hash, 0)
+        m1 = s1 | mapped(lambda a: a * 2)
+        m2 = s1 | mapped(lambda a: a * 3)
+        self.assertEqual(m1.hash, m2.hash)
 
     def test_mem_cache(self):
         s1 = from_iterable([1, 2, 3, 4, 5])
@@ -370,6 +384,15 @@ class TestUtil(unittest.TestCase):
         s |= (None, int)
         self.assertEqual(4, len(s))
         self.assertEqual(("hello", 10), s[0])
+
+
+class TestBatckProcessor(unittest.TestCase):
+    def test_pipe(self):
+        c = collate()
+        s = sort(None)
+
+        p = c | s
+        self.assertIsInstance(p, PipeFunc)
 
 
 if __name__ == '__main__':

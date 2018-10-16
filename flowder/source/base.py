@@ -13,27 +13,27 @@ from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, 
 from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array, ra_slice
 
 
-class PipeLine:
-    """
-    パイプでつなげる関数
-    依存情報も保持する
-    """
-
+class PipeBase:
     def __init__(self, applications):
-        # assert type(dependencies) == list
         assert type(applications) == list
         self.applications = applications
-        # self.dependencies = dependencies
 
     def __or__(self, other):
-        if isinstance(other, PipeLine):
+        if isinstance(other, PipeBase):
             return self._concat(other)
         else:
             raise TypeError(f"invalid pipe type: {other}")
 
     def _concat(self, other):
-        assert isinstance(other, PipeLine)
+        assert isinstance(other, PipeBase)
         return PipeLine(self.applications + other.applications)
+
+
+class PipeLine(PipeBase):
+    """
+    パイプでつなげる関数
+    依存情報も保持する
+    """
 
     def _apply(self, source, key):
         assert isinstance(source, Source)
@@ -41,8 +41,11 @@ class PipeLine:
         for ap in self.applications:
             source = ap(source, key)
 
-        # source.dependencies += self.dependencies
         return source
+
+    def _concat(self, other):
+        assert isinstance(other, PipeLine)
+        return PipeLine(self.applications + other.applications)
 
 
 class FlatMapped(PipeLine):
@@ -53,6 +56,7 @@ class FlatMapped(PipeLine):
         :param dependencies: transformのdependenciesに追加される
         """
         assert type(dependencies) == list
+        dependencies += ["FlatMap"]
         if isinstance(transform, DependFunc):
             d = transform.dependencies + dependencies
             transform = transform.func
@@ -106,6 +110,7 @@ class Mapped(PipeLine):
         :param dependencies: transformのdependenciesに追加される
         """
         assert type(dependencies) == list
+        dependencies += ["Map"]
         if isinstance(transform, DependFunc):
             d = transform.dependencies + dependencies
             transform = transform.func
@@ -159,6 +164,7 @@ class Filtered(PipeLine):
         :param dependencies: predのdependenciesに追加される
         """
         assert type(dependencies) == list
+        dependencies += ["Filter"]
         if isinstance(pred, DependFunc):
             d = pred.dependencies + dependencies
             pred = pred.func
@@ -359,7 +365,7 @@ class Source:
         :return:
         """
         if self._hash is None:
-            hs = 0
+            hs = 1
             if self.parents is not None:
                 for p in self.parents:
                     hs = (hs * 31 + p.hash) % sys.maxsize
