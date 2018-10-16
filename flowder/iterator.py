@@ -122,16 +122,10 @@ class _IteratorBase:
     def __init__(self,
                  batch_size,
                  num_example,
-                 batch_transforms,
                  prefetch_next_iterator,
                  ):
         assert isinstance(batch_size, int)
         assert isinstance(num_example, int)
-        if batch_transforms is None:
-            batch_transforms = []
-        assert hasattr(batch_transforms, '__len__')
-
-        self.batch_transforms = batch_transforms
         self.batch_size = batch_size
         self.length = math.ceil(num_example / batch_size)
         self.num_example = num_example
@@ -165,6 +159,23 @@ class Iterator(_IteratorBase):
                  device=None,
                  prefetch_next_iterator=True,
                  ):
+        """
+
+        :param dataset:
+        :param batch_size:
+        :param shuffle:
+        :param batch_transforms: list or tuple or callable(batch)
+        :param num_workers:
+        :param pin_memory:
+        :param drop_last:
+        :param device:
+        :param prefetch_next_iterator:
+        """
+
+        if batch_transforms is None:
+            batch_transforms = []
+        if not isinstance(batch_transforms, list) and not isinstance(batch_transforms, tuple):
+            batch_transforms = [batch_transforms]
 
         def collate(batch):
             for t in batch_transforms:
@@ -186,7 +197,6 @@ class Iterator(_IteratorBase):
         super(Iterator, self).__init__(
             batch_size,
             len(dataset),
-            batch_transforms,
             prefetch_next_iterator and num_workers != 0
         )
 
@@ -226,6 +236,10 @@ class BucketIterator(_IteratorBase):
     ):
         assert dataset is not None
         assert sort_key is not None
+        if batch_transforms is None:
+            batch_transforms = []
+        if not isinstance(batch_transforms, list) and not isinstance(batch_transforms, tuple):
+            batch_transforms = [batch_transforms]
 
         def collate(over_batch):  # in: 100倍バッチのexample list
             try:
@@ -264,7 +278,6 @@ class BucketIterator(_IteratorBase):
         super(BucketIterator, self).__init__(
             batch_size,
             len(dataset),
-            batch_transforms=batch_transforms,
             prefetch_next_iterator=prefetch_next_iterator and num_workers != 0
         )
 
