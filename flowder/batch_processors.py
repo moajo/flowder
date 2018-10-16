@@ -44,17 +44,10 @@ def tensor_pad_sequence(field_names, include_length=True, padding_value=1):
 
     def wrapper(batch):
         for field_name in field_names:
-            length = torch.LongTensor([len(a) for a in batch[field_name]])
-            _, indices = length.sort(descending=True)
-            prem = [batch[field_name][i][:, None] for i in indices]
-            padded = pad_sequence(prem, padding_value=padding_value)
-            result = padded[:, indices.sort()[1], 0]
-            result = result.contiguous()
-            # result = result.pin_memory()
+            result = pad_sequence(batch[field_name], padding_value=padding_value)
+            length = torch.LongTensor([len(a) for a in batch[field_name]]).contiguous()
 
             if include_length:
-                length = length.contiguous()
-                # length = length.pin_memory()
                 batch[field_name] = result, length
             else:
                 batch[field_name] = result
