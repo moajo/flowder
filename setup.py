@@ -13,6 +13,6 @@ setup(
     entry_points="""
     [console_scripts]
     """,
-    install_requires=['tqdm'],
+    install_requires=['tqdm', 'numpy'],
     include_package_data=True,
 )
