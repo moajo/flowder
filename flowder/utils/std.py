@@ -2,6 +2,7 @@
 import hashlib
 import linecache
 import pathlib
+import gzip
 
 from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
@@ -97,6 +98,25 @@ def lines(path):
     obs = ic_from_generator(_gen)
 
     return Source(obs, ra, length=length, dependencies=[d])
+
+
+def lines_gzip(path):
+    path = pathlib.Path(path)
+    assert path.exists(), "file not found"
+
+    d = _cal_file_hash(path)
+
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        length = sum(1 for _ in f)
+
+    def _gen():
+        with gzip.open(path, "rt", encoding="utf-8") as ff:
+            for line in ff:
+                yield line[:-1]
+
+    obs = ic_from_generator(_gen)
+
+    return Source(obs, length=length, dependencies=[d])
 
 
 def directory(path):

@@ -72,6 +72,7 @@ def to_dict(*keys):
 
     @map_pipe()
     def wrapper(s):
+        assert isinstance(s, tuple)
         return {
             k: v
             for k, v in zip(keys, s)

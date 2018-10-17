@@ -8,7 +8,7 @@ from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered
 from flowder.source.depend_func import depend
-from flowder.utils import from_array, from_items, from_iterable, lines
+from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip
 
 
 class TestSource(unittest.TestCase):
@@ -384,6 +384,18 @@ class TestUtil(unittest.TestCase):
         s |= (None, int)
         self.assertEqual(4, len(s))
         self.assertEqual(("hello", 10), s[0])
+
+    def test_gzip(self):
+        s = lines_gzip(Path(__file__).parent / "data" / "sample.gz")
+        self.assertEqual(5, len(s))
+        self.assertEqual([
+            'abc',
+            'def',
+            'ghi',
+            'jkl',
+            'mno',
+        ], list(s))
+        self.assertFalse(s.random_accessible)
 
 
 class TestBatckProcessor(unittest.TestCase):
