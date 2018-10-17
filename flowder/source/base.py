@@ -56,7 +56,6 @@ class FlatMapped(PipeLine):
         :param dependencies: transformのdependenciesに追加される
         """
         assert type(dependencies) == list
-        dependencies += ["FlatMap"]
         if isinstance(transform, DependFunc):
             d = transform.dependencies + dependencies
             transform = transform.func
@@ -110,7 +109,6 @@ class Mapped(PipeLine):
         :param dependencies: transformのdependenciesに追加される
         """
         assert type(dependencies) == list
-        dependencies += ["Map"]
         if isinstance(transform, DependFunc):
             d = transform.dependencies + dependencies
             transform = transform.func
@@ -164,7 +162,6 @@ class Filtered(PipeLine):
         :param dependencies: predのdependenciesに追加される
         """
         assert type(dependencies) == list
-        dependencies += ["Filter"]
         if isinstance(pred, DependFunc):
             d = pred.dependencies + dependencies
             pred = pred.func
@@ -339,7 +336,7 @@ class Source:
             ra = None
         return Source(ic_concat(self._raw, other._raw), random_accessor=ra, parents=[self, other], length=length)
 
-    def __mul__(self, other):  # zip Srouce
+    def __mul__(self, other):  # zip Source
         assert isinstance(other, Source)
         if self.has_length and other.has_length:
             length = min(len(self), len(other))
@@ -412,6 +409,9 @@ class Source:
         raise TypeError("invalid pipe operation")
 
     def flat_map(self, converter, dependencies=None):
+        if dependencies is None:
+            dependencies = []
+        dependencies = dependencies + ["flatmap"]
         return Source(
             ic_flat_map(self._raw, converter),
             parents=[self],
@@ -428,6 +428,9 @@ class Source:
         """
         if type(transform) in [dict, list, tuple]:
             transform = _pattern_to_transform(transform)
+        if dependencies is None:
+            dependencies = []
+        dependencies = dependencies + ["map"]
         return Source(
             ic_map(self._raw, transform),
             random_accessor=ra_map(self._random_accessor, transform) if self.random_accessible else None,
@@ -438,6 +441,9 @@ class Source:
     def filter(self, pred, dependencies=None):
         if type(pred) in [dict, list, tuple]:
             pred = _pattern_to_filter(pred)
+        if dependencies is None:
+            dependencies = []
+        dependencies = dependencies + ["filter"]
         return Source(ic_filter(self._raw, pred), parents=[self], dependencies=dependencies)
 
     def cache(self, name, cache_dir=".tmp", clear_cache="no", check_only=False, caller_file_name=None):

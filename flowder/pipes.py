@@ -22,7 +22,7 @@ def lowercase():
     :return:
     """
 
-    @map_pipe()
+    @map_pipe(["lowercase"])
     def wrapper(tokenized):
         if type(tokenized) == str:
             tokenized = [tokenized]
@@ -41,7 +41,7 @@ def split(c=None) -> Mapped:
     :return:
     """
 
-    @map_pipe()
+    @map_pipe(["split"])
     def wrapper(s):
         assert type(s) == str
         return [word for word in s.split(c) if word != ""]
@@ -56,7 +56,7 @@ def select(key) -> Mapped:
     :return:
     """
 
-    @map_pipe()
+    @map_pipe(["select"])
     def wrapper(s):
         return s[key]
 
@@ -70,7 +70,7 @@ def to_dict(*keys):
     :return:
     """
 
-    @map_pipe()
+    @map_pipe(["to_dict"])
     def wrapper(s):
         assert isinstance(s, tuple)
         return {
@@ -82,8 +82,8 @@ def to_dict(*keys):
 
 
 def add_sos(sos_token=2) -> Mapped:
-    return mapped(_AddToken(sos_token, head=True))
+    return mapped(_AddToken(sos_token, head=True), dependencies=["add_sos"])
 
 
 def add_eos(eos_token=3) -> Mapped:
-    return mapped(_AddToken(eos_token, head=False))
+    return mapped(_AddToken(eos_token, head=False), dependencies=["add_sos"])

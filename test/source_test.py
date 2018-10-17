@@ -179,24 +179,35 @@ class TestSource(unittest.TestCase):
 
     def test_hash(self):
         s1 = from_items(1, 2, 3, 4, 5)
-        self.assertEqual(s1.hash, 0)
         m = s1.filter(lambda a: a % 2 == 0)
-        self.assertEqual(m.hash, 0)
-        m = s1.filter(lambda a: a % 2 == 0, dependencies=[2])
-        self.assertNotEqual(m.hash, 0)
+        self.assertNotEqual(s1.hash, m.hash)
+        m2 = s1.filter(lambda a: a % 2 == 0, dependencies=[2])
+        self.assertNotEqual(s1.hash, m2.hash)
+        self.assertNotEqual(m.hash, m2.hash)
 
-        m = s1.map(lambda a: a % 2 == 0)
-        self.assertEqual(m.hash, 0)
-        m = s1.map(lambda a: a % 2 == 0, dependencies=[2])
-        self.assertNotEqual(m.hash, 0)
+        m3 = s1.map(lambda a: a % 2 == 0)
+        self.assertNotEqual(m.hash, m3.hash)
+        self.assertNotEqual(m2.hash, m3.hash)
+        m4 = s1.map(lambda a: a % 2 == 0, dependencies=[2])
+        self.assertNotEqual(m3.hash, m4.hash)
 
-    def test_hash(self):
+    def test_hash2(self):
         s1 = from_items(1, 2, 3, 4, 5)
         s2 = s1 | mapped(lambda a: a * 2)
+        s2_2 = s1.map(lambda a: a * 2)
+        self.assertEqual(s2.hash, s2_2.hash)
         self.assertNotEqual(s1.hash, s2.hash)
         s3a = s1 | mapped(lambda a: a * 2, dependencies=[2])
         s3b = s1 | mapped(lambda a: a * 3, dependencies=[3])
         self.assertNotEqual(s3a.hash, s3b.hash)
+
+    def test_hash3(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = s1 | split()
+        s3 = s1 | select("key")
+        self.assertNotEqual(s1.hash, s2.hash)
+        self.assertNotEqual(s1.hash, s3.hash)
+        self.assertNotEqual(s2.hash, s3.hash)
 
 
 class TestPipe(unittest.TestCase):
