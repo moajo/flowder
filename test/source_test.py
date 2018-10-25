@@ -6,7 +6,7 @@ from flowder.batch_processors import collate, sort, PipeFunc
 
 from flowder.pipes import split, select, to_dict
 from flowder.source import Source
-from flowder.source.base import mapped, zipped, filtered
+from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
 from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip
 
@@ -86,8 +86,14 @@ class TestSource(unittest.TestCase):
         s1 = from_items(1, 2, 3)
         m = s1.flat_map(lambda a: range(a))
         self.assertFalse(m.has_length)
-
         self.assertEqual([0, 0, 1, 0, 1, 2], list(m))
+
+        m2 = s1 | flat_mapped(lambda a: range(a))
+        self.assertEqual([0, 0, 1, 0, 1, 2], list(m2))
+
+        # flatmap could also flatten the Source object
+        m3 = s1 | flat_mapped(lambda a: from_array(list(range(a))))
+        self.assertEqual([0, 0, 1, 0, 1, 2], list(m3))
 
     def test_map(self):
         s1 = from_items(1, 2, 3, 4, 5)

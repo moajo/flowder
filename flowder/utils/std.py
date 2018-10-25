@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import glob as glob_
 import hashlib
 import linecache
 import pathlib
@@ -122,6 +123,19 @@ def lines_gzip(path):
 def directory(path):
     path = pathlib.Path(path)
     files = list(path.iterdir())
+    obs = ic_from_array(files)
+    ra = ra_from_array(files)
+    hs = _calc_args_hash([str(a) for a in files])
+    return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
+
+
+def glob(glob_path: str):
+    """
+    files = glob("./*.jpg")
+    :param glob_path:
+    :return:
+    """
+    files = [pathlib.Path(a) for a in glob_.glob(glob_path)]
     obs = ic_from_array(files)
     ra = ra_from_array(files)
     hs = _calc_args_hash([str(a) for a in files])

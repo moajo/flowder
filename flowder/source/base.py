@@ -74,26 +74,7 @@ class FlatMapped(PipeLine):
             if key is None:
                 return source.flat_map(transform, dependencies=d)
             else:  # tuple of source
-                def _m(data):
-                    if type(data) in [tuple, list]:
-                        assert type(key) == int
-                        assert len(data) > key, f"invalid tuple mapping key(out of range): " \
-                                                f"\n\tkey: {key}" \
-                                                f"\n\tlen(data): {len(data)}"
-                        return tuple(
-                            transform(data[i]) if i == key else data[i]
-                            for i in range(len(data))
-                        )
-                    elif type(data) == dict:
-                        assert key in data, f"invalid dict mapping key(key not found): " \
-                                            f"\n\tkey: {key}" \
-                                            f"\n\tdata.keys(): {data.keys()}"
-                        return {
-                            k: transform(data[k]) if k == key else data[k]
-                            for k in data
-                        }
-
-                return source.map(_m)
+                raise TypeError("flatmap with key is not supported")
 
         super(FlatMapped, self).__init__([_application])
 
