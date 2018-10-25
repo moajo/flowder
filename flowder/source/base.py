@@ -337,7 +337,7 @@ class Source:
         return self.length is not None
 
     @property
-    def hash(self):
+    def hash(self) -> int:
         """
         親のhashと自身のdependenciesからhashを計算してキャッシュする
         :return:
@@ -448,7 +448,7 @@ class Source:
             p = pathlib.Path(inspect.currentframe().f_back.f_code.co_filename)
             caller_file_name = p.name[:-len(p.suffix)]
 
-        cache_base_name = f"flowder.{caller_file_name}.{name}.{str(self.hash)}"
+        cache_base_name = f"flowder.{caller_file_name}.{name}.{hex(self.hash)[2:]}"
         cache_file_path = cache_dir / cache_base_name
 
         if check_only:
