@@ -44,13 +44,14 @@ def sort(sort_key) -> PipeFunc:
     return wrapper
 
 
-def tensor_pad_sequence(field_names, include_length=True, padding_value=1) -> PipeFunc:
+def tensor_pad_sequence(field_names, include_length=True, batch_first=False, padding_value=1) -> PipeFunc:
     """
     可変長シーケンス列をpaddingする。
     対象はtensorのlist。各tensorはshape[0]を長さとする。
     同時にもともとの長さを1次元tensorとして作成し、元のフィールドを長さとのtupleに置き換える
     :param field_names: strまたはstrのtuple
     :param include_length: 長さ情報を残すか
+    :param batch_first:
     :param padding_value:
     :return:
     """
@@ -63,10 +64,9 @@ def tensor_pad_sequence(field_names, include_length=True, padding_value=1) -> Pi
     @pipe
     def wrapper(batch):
         for field_name in field_names:
-            result = pad_sequence(batch[field_name], padding_value=padding_value)
-            length = torch.LongTensor([len(a) for a in batch[field_name]]).contiguous()
-
+            result = pad_sequence(batch[field_name], padding_value=padding_value, batch_first=batch_first)
             if include_length:
+                length = torch.LongTensor([len(a) for a in batch[field_name]]).contiguous()
                 batch[field_name] = result, length
             else:
                 batch[field_name] = result
