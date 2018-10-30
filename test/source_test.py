@@ -236,8 +236,8 @@ class TestPipe(unittest.TestCase):
         m2 = s1 | (mapped(lambda a: a + 1) | mapped(lambda a: a * 2))
         self.assertEqual(list(m), list(m2))
 
-        self.assertRaises(TypeError, lambda: (mapped(lambda a: a + 1) | 42))
-        self.assertRaises(TypeError, lambda: 42 | (mapped(lambda a: a + 1)))
+        self.assertRaises(TypeError, lambda: mapped(lambda a: a + 1) | 42)
+        self.assertRaises(TypeError, lambda: 42 | mapped(lambda a: a + 1))
 
         s1 = from_items(1, 2, 3, 4, 5)
         s2 = from_items(1, 1, 1, 1, 1)
@@ -377,6 +377,17 @@ class TestPipe(unittest.TestCase):
         self.assertEqual([1, 2, 3, 4, 5], list(r))
         r = m | select("b")
         self.assertEqual([1, 1, 1, 1, 1], list(r))
+
+    def test_for_array_pipe(self):
+        l = [1, 2, 3, 4, 5]
+        m = l | mapped(lambda x: 2 * x)
+        self.assertTrue(m.has_length)
+        self.assertEqual([2 * n for n in l], list(m))
+
+        l = [1, 2, 3, 4, 5]
+        m = (a for a in l) | mapped(lambda x: 2 * x)
+        self.assertFalse(m.has_length)
+        self.assertEqual([2 * n for n in l], list(m))
 
 
 class TestCache(unittest.TestCase):

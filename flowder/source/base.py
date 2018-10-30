@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
-    ic_concat, ic_flat_map
+    ic_concat, ic_flat_map, ic_from_iterable
 from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array, ra_slice
 
 
@@ -23,6 +23,14 @@ class PipeBase:
             return self._concat(other)
         else:
             raise TypeError(f"invalid pipe type: {other}")
+
+    def __ror__(self, other):
+        if isinstance(other, list):
+            return Source(ic_from_array(other), ra_from_array(other), length=len(other)) | self
+        if hasattr(other, "__iter__"):
+            return Source(ic_from_iterable(other), random_accessor=None) | self
+
+        raise TypeError(f"unsupported pipe-operation with {type(other)}")
 
     def _concat(self, other):
         assert isinstance(other, PipeBase)
