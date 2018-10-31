@@ -555,7 +555,7 @@ class Source:
                 sl = slice(start, stop, step)
                 return Source(
                     ic_slice(self._raw, sl),
-                    random_accessor=ra_slice(self._random_accessor, s=sl),
+                    random_accessor=ra_slice(self._random_accessor, s=sl) if self.random_accessible else None,
                     length=(stop - start) // step,
                     parents=[self])
             else:
