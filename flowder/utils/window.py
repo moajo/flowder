@@ -1,11 +1,17 @@
 #!/usr/bin/env python
 from collections import deque
-from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash, PipeLine
-from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
-from flowder.source.random_access import ra_from_array
+
+from flowder.source.base import Source, PipeLine
 
 
 class Window(PipeLine):
+    """
+    pipe:
+    通過するシーケンスをバッファして、直近のwindow_sizeの要素のtupleに変換する
+    drop_first=Trueなら、window_sizeの要素が通過するまで出力しない
+    そうでなければ、たりない要素をNoneで埋めて出力
+    """
+
     def __init__(self, window_size, drop_first):
         def _application(source, key):
             assert isinstance(source, Source)
@@ -14,8 +20,9 @@ class Window(PipeLine):
 
         super(Window, self).__init__([_application])
 
-    def __call__(self, *args, **kwargs):
-        raise TypeError("Window never called")
+    def __call__(self, source):
+        assert isinstance(source, Source)
+        return source | self
 
 
 def windowed(window_size, drop_first) -> Window:

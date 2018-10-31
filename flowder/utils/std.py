@@ -5,7 +5,7 @@ import linecache
 import pathlib
 import gzip
 
-from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash
+from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash, FlatMapped
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
 from flowder.source.random_access import ra_from_array
 
@@ -72,6 +72,7 @@ def from_iterable(iterable):
     return Source(ic_from_iterable(iterable), None)
 
 
+@map_pipe()
 def lines(path):
     """
     return Source object contain lines in the file.
