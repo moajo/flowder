@@ -8,7 +8,7 @@ from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
-from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip
+from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten
 from flowder.utils.window import windowed
 
 
@@ -95,6 +95,12 @@ class TestSource(unittest.TestCase):
         # flatmap could also flatten the Source object
         m3 = s1 | flat_mapped(lambda a: from_array(list(range(a))))
         self.assertEqual([0, 0, 1, 0, 1, 2], list(m3))
+
+    def test_flatten(self):
+        s = [list(range(i)) for i in range(10)]
+
+        m = flatten(s)
+        self.assertEqual([n for a in s for n in a], list(m))
 
     def test_map(self):
         s1 = from_items(1, 2, 3, 4, 5)

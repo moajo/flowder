@@ -70,6 +70,7 @@ class FlatMapped(PipeLine):
         else:
             d = dependencies
         self.transform = transform
+        self.d = d
 
         def _application(source, key):
             """
@@ -86,8 +87,11 @@ class FlatMapped(PipeLine):
 
         super(FlatMapped, self).__init__([_application])
 
-    def __call__(self, *args, **kwargs):
-        return self.transform(*args, **kwargs)
+    def __call__(self, source):
+        if isinstance(source, list) or isinstance(source, tuple):
+            source = Source(ic_from_array(source), ra_from_array(source), length=len(source))
+        assert isinstance(source, Source)
+        return source.flat_map(self.transform, dependencies=self.d)
 
 
 class Mapped(PipeLine):
