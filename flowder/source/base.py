@@ -612,13 +612,15 @@ def _calc_args_hash(args):
     for obj in args:
         if type(obj) == str:
             obj_hash = int(hashlib.sha1(obj.encode('utf-8')).hexdigest(), 16)
-            hs = (hs * 31 + obj_hash) % sys.maxsize
         elif type(obj) == int:
-            hs = (hs * 31 + obj) % sys.maxsize
+            obj_hash = obj
+        elif type(obj) == bool:
+            obj_hash = 1 if obj else 0
         else:
             raise ValueError(
-                f"{obj} is not hashable.\nall arguments are needed to be hashable for caching"
+                f"{obj} is not hashable.\nall arguments must be hashable"
             )
+        hs = (hs * 31 + obj_hash) % sys.maxsize
     return hs
 
 
