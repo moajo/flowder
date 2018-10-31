@@ -142,5 +142,4 @@ def glob(glob_path: str):
     hs = _calc_args_hash([str(a) for a in files])
     return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
 
-
 flatten: FlatMapped = FlatMapped(lambda a: a, dependencies=[])

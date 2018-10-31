@@ -523,6 +523,11 @@ class Source:
         self._raw = ic_from_array(data)
         self._random_accessor = ra_from_array(data)
 
+    def count(self):
+        if not self.has_length:
+            self.length = sum(1 for _ in self)
+        return self.length
+
     def __getitem__(self, item):
         """
         sliceにはSourceを、intには値を返す

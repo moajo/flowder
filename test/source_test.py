@@ -229,6 +229,16 @@ class TestSource(unittest.TestCase):
         self.assertNotEqual(s1.hash, s3.hash)
         self.assertNotEqual(s2.hash, s3.hash)
 
+    def test_count(self):
+        s1 = from_array([1, 2, 3, 4, 5])
+        m = s1.flat_map(lambda a: [a])
+        self.assertFalse(m.has_length)
+        l = m.count()
+        self.assertTrue(m.has_length)
+
+        self.assertEqual(5, len(m))
+        self.assertEqual(len(m), l)
+
 
 class TestPipe(unittest.TestCase):
 
@@ -490,13 +500,15 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(list(m), list(m))
         ic_ra_test(m, "m5")
 
-    class TestBatckProcessor(unittest.TestCase):
-        def test_pipe(self):
-            c = collate()
-            s = sort(None)
 
-            p = c | s
-            self.assertIsInstance(p, PipeFunc)
+class TestBatchProcessor(unittest.TestCase):
+    def test_pipe(self):
+        c = collate()
+        s = sort(None)
 
-    if __name__ == '__main__':
-        unittest.main()
+        p = c | s
+        self.assertIsInstance(p, PipeFunc)
+
+
+if __name__ == '__main__':
+    unittest.main()
