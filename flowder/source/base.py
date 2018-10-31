@@ -279,7 +279,7 @@ class Source:
                  raw: IterableCreator,
                  random_accessor: RandomAccessor = None,
                  parents=None,
-                 length=None,
+                 length: int = None,
                  dependencies=None):
         """
 
@@ -295,6 +295,9 @@ class Source:
         self.dependencies = dependencies if dependencies is not None else []
         self.data = None  # for random access
         self._hash = None  # lazy eval
+
+        if length is not None:
+            assert length >= 0
 
         if random_accessor is not None:
             assert length is not None, "length must not be None if source is random accessible"
@@ -530,10 +533,14 @@ class Source:
                 start = item.start if item.start is not None else 0
                 step = item.step if item.step is not None else 1
                 assert step > 0
-                while stop < 0:
+                if stop < 0:
                     stop += self.length
-                while start < 0:
+                if stop < 0:
+                    stop = 0
+                if start < 0:
                     start += self.length
+                if start < 0:
+                    start = 0
                 stop = min(stop, self.length)
                 start = min(start, stop)
                 sl = slice(start, stop, step)

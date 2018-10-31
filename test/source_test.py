@@ -9,6 +9,7 @@ from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
 from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip
+from flowder.utils.window import windowed
 
 
 class TestSource(unittest.TestCase):
@@ -425,15 +426,64 @@ class TestUtil(unittest.TestCase):
         ], list(s))
         self.assertFalse(s.random_accessible)
 
+    def test_window(self):
+        def ic_ra_test(m, name):
+            for i in range(-10, 20):
+                self.assertEqual(list(m)[i:], list(m[i:]), f"{name}: i is {i}")
 
-class TestBatckProcessor(unittest.TestCase):
-    def test_pipe(self):
-        c = collate()
-        s = sort(None)
+            for i in range(-len(m), len(m)):
+                self.assertEqual(list(m)[i], m[i], f"{name}: i is {i}")
 
-        p = c | s
-        self.assertIsInstance(p, PipeFunc)
+        s = from_array(list(range(10)))
+        m = s | windowed(3, drop_first=True)
+        self.assertTrue(m.has_length)
+        self.assertEqual(8, len(m))
+        self.assertEqual(len(m), len(list(m)))
+        self.assertEqual([
+            (i - 2, i - 1, i) for i in range(2, 10)
+        ], list(m))
+        ic_ra_test(m, "m1")
 
+        m = s | windowed(3, drop_first=False)
+        self.assertTrue(m.has_length)
+        self.assertEqual(10, len(m))
+        self.assertEqual([
+            (i - 2 if i >= 2 else None, i - 1 if i >= 1 else None, i) for i in range(0, 10)
+        ], list(m))
+        ic_ra_test(m, "m2")
 
-if __name__ == '__main__':
-    unittest.main()
+        m = s | windowed(1, drop_first=True)
+        self.assertEqual(10, len(m))
+        self.assertEqual(len(m), len(list(m)))
+        self.assertEqual([
+            (i,) for i in range(10)
+        ], list(m))
+        ic_ra_test(m, "m3")
+
+        m4 = s | windowed(1, drop_first=False)
+        self.assertEqual(10, len(m4))
+        self.assertEqual(list(m), list(m4))
+        ic_ra_test(m4, "m4")
+
+        m = s | windowed(100, drop_first=True)
+        self.assertEqual(0, len(m))
+        self.assertEqual(len(m), len(list(m)))
+
+        m = s | windowed(100, drop_first=False)
+        self.assertEqual(10, len(m))
+        self.assertEqual([
+            (tuple(None for _ in range(100)) + tuple(range(i + 1)))[-100:] for i in range(10)
+        ], list(m))
+        self.assertEqual(list(m), list(m))
+        ic_ra_test(m, "m5")
+
+    class TestBatckProcessor(unittest.TestCase):
+        def test_pipe(self):
+            c = collate()
+            s = sort(None)
+
+            p = c | s
+            self.assertIsInstance(p, PipeFunc)
+
+    if __name__ == '__main__':
+        unittest.main()
