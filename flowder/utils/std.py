@@ -5,7 +5,8 @@ import linecache
 import pathlib
 import gzip
 
-from flowder.source.base import mapped, Source, ic_from_array, filtered, _calc_args_hash, FlatMapped
+from flowder.hash import default_hash_func
+from flowder.source.base import mapped, Source, ic_from_array, filtered, FlatMapped
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
 from flowder.source.random_access import ra_from_array
 
@@ -48,13 +49,19 @@ def filter_pipe(dependencies=None):
     return wrapper
 
 
-def from_array(array):
+def from_array(array, *, hash_func=None):
     """
     create Source from list or tuple
     :param array:
+    :param hash_func:
     :return:
     """
     assert type(array) in [tuple, list]
+    if hash_func is not None:
+        hs = hash_func(array)
+        return Source(ic_from_array(array), ra_from_array(array),
+                      length=len(array),
+                      dependencies=[hs])
     return Source(ic_from_array(array), ra_from_array(array), length=len(array))
 
 
@@ -126,7 +133,7 @@ def directory(path):
     files = list(path.iterdir())
     obs = ic_from_array(files)
     ra = ra_from_array(files)
-    hs = _calc_args_hash([str(a) for a in files])
+    hs = default_hash_func([str(a) for a in files])
     return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
 
 
@@ -139,7 +146,8 @@ def glob(glob_path: str):
     files = [pathlib.Path(a) for a in glob_.glob(glob_path)]
     obs = ic_from_array(files)
     ra = ra_from_array(files)
-    hs = _calc_args_hash([str(a) for a in files])
+    hs = default_hash_func([str(a) for a in files])
     return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
+
 
 flatten: FlatMapped = FlatMapped(lambda a: a, dependencies=[])

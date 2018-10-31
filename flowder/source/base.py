@@ -1,4 +1,3 @@
-import hashlib
 import pathlib
 import pickle
 import sys
@@ -7,6 +6,7 @@ import inspect
 
 from tqdm import tqdm
 
+from flowder.hash import default_hash_func
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
     ic_concat, ic_flat_map, ic_from_iterable
@@ -364,7 +364,7 @@ class Source:
                     hs = (hs * 31 + p.hash) % sys.maxsize
 
             if self.dependencies is not None:
-                hs = (hs * 31 + _calc_args_hash(self.dependencies)) % sys.maxsize
+                hs = (hs * 31 + default_hash_func(self.dependencies)) % sys.maxsize
             self._hash = hs
         return self._hash
 
@@ -605,23 +605,6 @@ class Source:
             other.feed_data(self)
         else:
             raise TypeError("invalid aggregate operation")
-
-
-def _calc_args_hash(args):
-    hs = 0
-    for obj in args:
-        if type(obj) == str:
-            obj_hash = int(hashlib.sha1(obj.encode('utf-8')).hexdigest(), 16)
-        elif type(obj) == int:
-            obj_hash = obj
-        elif type(obj) == bool:
-            obj_hash = 1 if obj else 0
-        else:
-            raise ValueError(
-                f"{obj} is not hashable.\nall arguments must be hashable"
-            )
-        hs = (hs * 31 + obj_hash) % sys.maxsize
-    return hs
 
 
 class Aggregator:
