@@ -96,10 +96,17 @@ class TestSource(unittest.TestCase):
         m3 = s1 | flat_mapped(lambda a: from_array(list(range(a))))
         self.assertEqual([0, 0, 1, 0, 1, 2], list(m3))
 
+        s2 = from_items([0, 1], [2, 3, 4])
+        m3 = s2 | flat_mapped(lambda a: a)
+        self.assertEqual([0, 1, 2, 3, 4], list(m3))
+
     def test_flatten(self):
         s = [list(range(i)) for i in range(10)]
 
         m = flatten(s)
+        self.assertEqual([n for a in s for n in a], list(m))
+
+        m = s | flatten
         self.assertEqual([n for a in s for n in a], list(m))
 
     def test_map(self):

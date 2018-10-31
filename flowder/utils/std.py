@@ -143,4 +143,4 @@ def glob(glob_path: str):
     return Source(obs, random_accessor=ra, length=len(files), dependencies=[hs])
 
 
-flatten = FlatMapped(lambda a: a, dependencies=[])
+flatten: FlatMapped = FlatMapped(lambda a: a, dependencies=[])
