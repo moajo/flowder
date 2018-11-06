@@ -120,8 +120,8 @@ def create_bucket_iterator(
 
 class _IteratorBase:
     def __init__(self,
-                 batch_size,
-                 num_example,
+                 batch_size: int,
+                 num_example: int,
                  prefetch_next_iterator,
                  ):
         assert isinstance(batch_size, int)
@@ -150,14 +150,14 @@ class _IteratorBase:
 class Iterator(_IteratorBase):
     def __init__(self,
                  dataset,
-                 batch_size,
-                 shuffle,
+                 batch_size: int,
+                 shuffle: bool,
                  batch_transforms=(sequence_collate,),
-                 num_workers=1,
-                 pin_memory=True,
-                 drop_last=False,
+                 num_workers: int = 1,
+                 pin_memory: bool = True,
+                 drop_last: bool = False,
                  device=None,
-                 prefetch_next_iterator=True,
+                 prefetch_next_iterator: bool = True,
                  ):
         """
 
