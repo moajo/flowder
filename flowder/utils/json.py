@@ -2,12 +2,13 @@
 import json as JSON
 from pathlib import Path
 
-from flowder import ra_from_array
+from flowder import ra_from_array, map_pipe
 from flowder.source.base import Source
 from flowder.source.iterable_creator import ic_from_array
 from flowder.utils.std import _cal_file_hash
 
 
+@map_pipe()
 def json(path, key=None):
     """
     return Source object contain the values in specific key of the json file
