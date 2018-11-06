@@ -406,11 +406,19 @@ class TestPipe(unittest.TestCase):
         s1 = from_items(1, 2, 3, 4, 5)
         s2 = from_items(1, 1, 1, 1, 1)
 
-        m = zipped(s1, s2) | mapped(lambda a: {"a": a[0], "b": a[1]})
-        r = m | select("a")
-        self.assertEqual([1, 2, 3, 4, 5], list(r))
-        r = m | select("b")
-        self.assertEqual([1, 1, 1, 1, 1], list(r))
+        m = zipped(s1, s2) | to_dict("a", "b")
+        a = m | select("a")
+        self.assertEqual([1, 2, 3, 4, 5], list(a))
+        b = m | select("b")
+        self.assertEqual([1, 1, 1, 1, 1], list(b))
+        a2, b2 = m | select("a", "b")
+        self.assertEqual(list(a), list(a2))
+        self.assertEqual(list(b), list(b2))
+
+        a2, a3, b2 = m | select("a", "a", "b")
+        self.assertEqual(list(a), list(a2))
+        self.assertEqual(list(a), list(a3))
+        self.assertEqual(list(b), list(b2))
 
     def test_to_dict(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -418,10 +426,10 @@ class TestPipe(unittest.TestCase):
 
         m = zipped(s1, s2) | to_dict("a", "b")
         m2 = zipped(s1, s2) | mapped(lambda a: {"a": a[0], "b": a[1]})
-        r = m | select("a")
-        self.assertEqual([1, 2, 3, 4, 5], list(r))
-        r = m | select("b")
-        self.assertEqual([1, 1, 1, 1, 1], list(r))
+        self.assertEqual(list(m2), list(m))
+        self.assertRaises(AssertionError, lambda: list(zipped(s1, s2) | to_dict("a")))
+        self.assertRaises(AssertionError, lambda: list(zipped(s1, s2) | to_dict("a", "b", "c")))
+        self.assertRaises(AssertionError, lambda: zipped(s1, s2) | to_dict("a", "a"))
 
     def test_for_array_pipe(self):
         l = [1, 2, 3, 4, 5]

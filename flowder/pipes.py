@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from flowder.utils import map_pipe
-from flowder.source.base import DependFunc, Mapped, mapped
+from flowder.source.base import DependFunc, Mapped, mapped, PipeLine
 
 
 class _AddToken(DependFunc):
@@ -49,18 +49,31 @@ def split(c=None) -> Mapped:
     return wrapper
 
 
-def select(key) -> Mapped:
+def select(*keys) -> Mapped:
     """
     指定したkeyの値にmapする
-    :param key:
+    複数のkeyを指定すると、それぞれのkeyをselectしたSourceのtupleを返す。
+    :param keys:
     :return:
     """
+    assert len(keys) > 0
+    if len(keys) == 1:
+        key = keys[0]
 
-    @map_pipe(["select"])
-    def wrapper(s):
-        return s[key]
+        @map_pipe([f"select({key})"])
+        def wrapper(s):
+            return s[key]
 
-    return wrapper
+        return wrapper
+    else:
+        def _application(source, key):
+            if key is None:
+                return tuple(source.map(lambda a, k=k: a[k], dependencies=[f"select({k})"]) for k in keys)
+            else:
+                raise ValueError("not supported")
+
+        p = PipeLine([], [_application])
+        return p
 
 
 def to_dict(*keys):
@@ -69,10 +82,12 @@ def to_dict(*keys):
     :param keys:
     :return:
     """
+    assert len(set(keys)) == len(keys), "keys must not contain duplicate items"
 
     @map_pipe(["to_dict"])
     def wrapper(s):
         assert isinstance(s, tuple), f"streaming item income to 'to_dict' must be tuple, but {type(s)} found"
+        assert len(s) == len(keys), f"to_dict: keys must has same length as streaming items, but {len(keys)}!={len(s)}"
         return {
             k: v
             for k, v in zip(keys, s)
