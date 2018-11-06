@@ -2,21 +2,15 @@ import torch
 
 from torch.nn.utils.rnn import pad_sequence
 from flowder.iterator import sequence_collate
-from flowder.source.base import PipeBase
-
-
-class PipeFunc(PipeBase):
-    def __call__(self, arg):
-        for ap in self.applications:
-            arg = ap(arg)
-        return arg
-
-    def _concat(self, other):
-        assert isinstance(other, PipeFunc)
-        return PipeFunc(self.applications + other.applications)
+from flowder.source.base import PipeFunc
 
 
 def pipe(func) -> PipeFunc:
+    """
+    funcをPipeFuncにラップするDecorator
+    :param func:
+    :return:
+    """
     return PipeFunc([func])
 
 

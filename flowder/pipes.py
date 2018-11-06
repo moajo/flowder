@@ -72,7 +72,7 @@ def to_dict(*keys):
 
     @map_pipe(["to_dict"])
     def wrapper(s):
-        assert isinstance(s, tuple)
+        assert isinstance(s, tuple), f"streaming item income to 'to_dict' must be tuple, but {type(s)} found"
         return {
             k: v
             for k, v in zip(keys, s)

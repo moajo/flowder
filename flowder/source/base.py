@@ -13,35 +13,52 @@ from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, 
 from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array, ra_slice
 
 
-class PipeBase:
-    def __init__(self, applications):
-        assert type(applications) == list
-        self.applications = applications
+class PipeFunc:
+    """
+    |で他のPipeFuncとconcatできる関数
+    """
+
+    def __init__(self, funcs: list):
+        assert type(funcs) == list
+        self.funcs = funcs
+
+    def __call__(self, arg):
+        for ap in self.funcs:
+            arg = ap(arg)
+        return arg
 
     def __or__(self, other):
-        if isinstance(other, PipeBase):
+        if isinstance(other, PipeFunc):
             return self._concat(other)
         else:
             raise TypeError(f"invalid pipe type: {other}")
 
+    def _concat(self, other):
+        assert isinstance(other, PipeFunc)
+        return PipeFunc(self.funcs + other.funcs)
+
+
+class PipeLine(PipeFunc):
+    """
+    Sourceへの作用素applicationを持つPipeFunc
+    依存情報も保持する
+    関数として呼ばれるときの処理とSourceにapplyする処理を区別する。
+    Sourceかlistかiterableと|でconcatできる。このときlist/iterableはSourceにラップされる
+    Sourceにapplyして別のSourceを作る
+    """
+
+    def __init__(self, funcs: list, applications: list):
+        assert type(applications) == list
+        self.applications = applications
+        super(PipeLine, self).__init__(funcs)
+
     def __ror__(self, other):
         if isinstance(other, list):
             return Source(ic_from_array(other), ra_from_array(other), length=len(other)) | self
-        if hasattr(other, "__iter__"):
+        elif hasattr(other, "__iter__"):
             return Source(ic_from_iterable(other), random_accessor=None) | self
-
-        raise TypeError(f"unsupported pipe-operation with {type(other)}")
-
-    def _concat(self, other):
-        assert isinstance(other, PipeBase)
-        return PipeLine(self.applications + other.applications)
-
-
-class PipeLine(PipeBase):
-    """
-    パイプでつなげる関数
-    依存情報も保持する
-    """
+        else:
+            raise TypeError(f"unsupported pipe-operation with {type(other)}")
 
     def _apply(self, source, key):
         assert isinstance(source, Source)
@@ -53,7 +70,7 @@ class PipeLine(PipeBase):
 
     def _concat(self, other):
         assert isinstance(other, PipeLine)
-        return PipeLine(self.applications + other.applications)
+        return PipeLine(self.funcs + other.funcs, self.applications + other.applications)
 
 
 class FlatMapped(PipeLine):
@@ -85,16 +102,23 @@ class FlatMapped(PipeLine):
             else:  # tuple of source
                 raise TypeError("flatmap with key is not supported")
 
-        super(FlatMapped, self).__init__([_application])
+        super(FlatMapped, self).__init__([self], [_application])
 
     def __call__(self, source):
         if isinstance(source, list) or isinstance(source, tuple):
             source = Source(ic_from_array(source), ra_from_array(source), length=len(source))
-        assert isinstance(source, Source)
+        assert isinstance(source, Source), \
+            f"Argument for FlatMapped called as function must be Source, but {type(source)} found"
         return source.flat_map(self.transform, dependencies=self.d)
 
 
 class Mapped(PipeLine):
+    """
+    map operator
+    関数として呼び出すとtransformがそのまま呼ばれる
+    Sourceに適用してmapする
+    """
+
     def __init__(self, transform, dependencies):
         """
 
@@ -141,10 +165,7 @@ class Mapped(PipeLine):
 
                 return source.map(_m, dependencies=d)
 
-        super(Mapped, self).__init__([_application])
-
-    def __call__(self, *args, **kwargs):
-        return self.transform(*args, **kwargs)
+        super(Mapped, self).__init__([transform], [_application])
 
 
 class Filtered(PipeLine):
@@ -181,10 +202,7 @@ class Filtered(PipeLine):
 
                 return source.filter(_m, dependencies=d)
 
-        super(Filtered, self).__init__([_application])
-
-    def __call__(self, *args, **kwargs):
-        return self.pred(*args, **kwargs)
+        super(Filtered, self).__init__([pred], [_application])
 
 
 def flat_mapped(convert, dependencies=None) -> FlatMapped:
@@ -383,6 +401,9 @@ class Source:
         :return:
         """
         if isinstance(other, PipeLine):
+            return other._apply(self, key=None)
+        if callable(other):
+            other = mapped(other)
             return other._apply(self, key=None)
         if type(other) == tuple:
             assert all(a is None or isinstance(a, PipeLine) or callable(a) for a in other)

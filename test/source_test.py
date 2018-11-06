@@ -248,10 +248,11 @@ class TestPipe(unittest.TestCase):
         self.assertRaises(TypeError, lambda: s1 | 42)  # must has type Pipe or pattern
 
         m = s1 | mapped(lambda a: a + 1)
-        l = [a for a in m]
-        self.assertEqual([2, 3, 4, 5, 6], l)
+        m2 = s1 | (lambda a: a + 1)
+        self.assertEqual([2, 3, 4, 5, 6], list(m))
         self.assertEqual(m.parents, [s1])
         self.assertEqual(len(m), 5)
+        self.assertEqual(list(m), list(m2), "callable is assumed to be mapped implicitly")
 
         m = s1 | mapped(lambda a: a + 1) | mapped(lambda a: a * 2)
         l = [a for a in m]
@@ -326,6 +327,10 @@ class TestPipe(unittest.TestCase):
             "a": mapped(lambda a: a + 1),
             "b": mapped(lambda a: a * 2),
         }
+        r3 = r | {
+            "a": lambda a: a + 1,
+            "b": lambda a: a * 2,
+        }
         self.assertEqual([
             {"a": 2, "b": 2},
             {"a": 3, "b": 2},
@@ -333,6 +338,7 @@ class TestPipe(unittest.TestCase):
             {"a": 5, "b": 2},
             {"a": 6, "b": 2},
         ], list(r2))
+        self.assertEqual(list(r2), list(r3))
 
     def test_filter(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -413,6 +419,27 @@ class TestPipe(unittest.TestCase):
         self.assertFalse(m.has_length)
         self.assertEqual([2 * n for n in l], list(m))
 
+    def test_pipe_combination(self):
+        l = [1, 2, 3, 4, 5]
+        m1 = mapped(lambda a: a * 2)
+        m2 = mapped(lambda a: a + 1)
+        m = m1 | m2
+        self.assertEqual([a * 2 + 1 for a in l], list(l | m))
+        self.assertEqual([a * 2 + 1 for a in l], list([m(a) for a in l]))
+
+        l = [1, 2, 3, 4, 5]
+        p1 = filtered(lambda a: a % 2 == 0)
+        p2 = mapped(lambda a: a + 1)
+        m = p1 | p2
+        self.assertEqual([a + 1 for a in l if a % 2 == 0], list(l | m))
+        self.assertRaises(TypeError, [m(a) for a in l])
+
+        l = from_array([{"a": i, "b": i * 2} for i in range(10)])
+        p1 = mapped(lambda a: a * 2)
+        p2 = mapped(lambda a: a + 1)
+        m = p1 | p2
+        self.assertEqual([{"a": i * 2 + 1, "b": i * 2} for i in range(10)], list(l | {"a": m}))
+
 
 class TestCache(unittest.TestCase):
     def test_file_cache(self):
@@ -426,8 +453,12 @@ class TestCache(unittest.TestCase):
 class TestUtil(unittest.TestCase):
     def test_lines_splits(self):
         s = lines(Path(__file__).parent / "sample_text.txt")
+        s2 = from_items(Path(__file__).parent / "sample_text.txt") | lines
+        s3 = from_items(Path(__file__).parent / "sample_text.txt") | lines | flatten
         self.assertEqual(4, len(s))
         self.assertEqual("hello 10", s[0])
+        self.assertEqual(list(s), list(s2[0]))
+        self.assertEqual(list(s), list(s3))
 
         s = s | split()
         self.assertEqual(4, len(s))

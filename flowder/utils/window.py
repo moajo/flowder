@@ -18,10 +18,10 @@ class Window(PipeLine):
             assert key is None, "Window with key is not supported"
             return _window(source, window_size, drop_first)
 
-        super(Window, self).__init__([_application])
+        super(Window, self).__init__([], [_application])
 
     def __call__(self, source):
-        assert isinstance(source, Source)
+        assert isinstance(source, Source), f"Argument of window must be Source, but {type(source)} is given"
         return source | self
 
 
