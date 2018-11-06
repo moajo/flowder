@@ -242,6 +242,23 @@ class TestSource(unittest.TestCase):
 
 class TestPipe(unittest.TestCase):
 
+    def test_zipped(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = from_items(1, 1, 1, 1, 1)
+        z = zipped(s1, s2)
+        self.assertEqual([
+            (1, 1),
+            (2, 1),
+            (3, 1),
+            (4, 1),
+            (5, 1),
+        ], list(z))
+
+        s1 = from_items(1, 2, 3, 4, 5)
+        s2 = from_items(1, 1, 1, 1, 1, 1, 1, 1, 1)
+        z2 = zipped(s1, s2)
+        self.assertEqual(list(z), list(z2), "zipped sequence has same length as shorter one")
+
     def test_mapped(self):
         s1 = from_items(1, 2, 3, 4, 5)
 
@@ -255,32 +272,26 @@ class TestPipe(unittest.TestCase):
         self.assertEqual(list(m), list(m2), "callable is assumed to be mapped implicitly")
 
         m = s1 | mapped(lambda a: a + 1) | mapped(lambda a: a * 2)
-        l = [a for a in m]
-        self.assertEqual([4, 6, 8, 10, 12], l)
-        self.assertEqual(len(m), 5)
-        m2 = s1 | (mapped(lambda a: a + 1) | mapped(lambda a: a * 2))
+        m2 = s1 | (lambda a: a + 1) | mapped(lambda a: a * 2)
+        m3 = s1 | mapped(lambda a: a + 1) | (lambda a: a * 2)
+        m4 = s1 | (mapped(lambda a: a + 1) | mapped(lambda a: a * 2))
+        self.assertEqual([4, 6, 8, 10, 12], list(m))
+        self.assertEqual(5, len(m))
         self.assertEqual(list(m), list(m2))
+        self.assertEqual(list(m), list(m3))
+        self.assertEqual(list(m), list(m4))
 
         self.assertRaises(TypeError, lambda: mapped(lambda a: a + 1) | 42)
         self.assertRaises(TypeError, lambda: 42 | mapped(lambda a: a + 1))
 
         s1 = from_items(1, 2, 3, 4, 5)
         s2 = from_items(1, 1, 1, 1, 1)
-
         z = zipped(s1, s2)
-        self.assertEqual([
-            (1, 1),
-            (2, 1),
-            (3, 1),
-            (4, 1),
-            (5, 1),
-        ], list(z))
-        # self.assertEqual((2, 1), z[1])
-        # self.assertEqual((3, 1), z[2])
-        # self.assertEqual((4, 1), z[3])
-        # self.assertEqual((5, 1), z[4])
 
-        r = zipped(s1, s2) | (mapped(lambda a: a + 1), mapped(lambda a: a - 1))
+        r = z | (mapped(lambda a: a + 1), mapped(lambda a: a - 1))
+        r2 = z | ((lambda a: a + 1), mapped(lambda a: a - 1))
+        r3 = z | (mapped(lambda a: a + 1), (lambda a: a - 1))
+        r4 = z | ((lambda a: a + 1), (lambda a: a - 1))
         self.assertEqual([
             (2, 0),
             (3, 0),
@@ -288,8 +299,11 @@ class TestPipe(unittest.TestCase):
             (5, 0),
             (6, 0),
         ], list(r))
+        self.assertEqual(list(r), list(r2))
+        self.assertEqual(list(r), list(r3))
+        self.assertEqual(list(r), list(r4))
 
-        r = zipped(s1, s2) | (mapped(lambda a: a + 1), None) | (mapped(lambda a: a * 2), None)
+        r = z | (mapped(lambda a: a + 1), None) | (mapped(lambda a: a * 2), None)
         self.assertEqual([
             (2 * 2, 1),
             (3 * 2, 1),
@@ -298,7 +312,7 @@ class TestPipe(unittest.TestCase):
             (6 * 2, 1),
         ], list(r))
 
-        r = zipped(s1, s2) | (None, mapped(lambda a: a + 1))
+        r = z | (None, mapped(lambda a: a + 1))
         self.assertEqual([
             (1, 2),
             (2, 2),
@@ -307,7 +321,7 @@ class TestPipe(unittest.TestCase):
             (5, 2),
         ], list(r))
 
-        r = zipped(s1, s2) | (mapped(lambda a: a + 1), None) | (None, mapped(lambda a: a * 2))
+        r = z | (mapped(lambda a: a + 1), None) | (None, mapped(lambda a: a * 2))
         self.assertEqual([
             (2, 2),
             (3, 2),
@@ -403,6 +417,7 @@ class TestPipe(unittest.TestCase):
         s2 = from_items(1, 1, 1, 1, 1)
 
         m = zipped(s1, s2) | to_dict("a", "b")
+        m2 = zipped(s1, s2) | mapped(lambda a: {"a": a[0], "b": a[1]})
         r = m | select("a")
         self.assertEqual([1, 2, 3, 4, 5], list(r))
         r = m | select("b")
