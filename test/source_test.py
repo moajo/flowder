@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import shutil
 import unittest
 from pathlib import Path
 
@@ -465,12 +466,34 @@ class TestPipe(unittest.TestCase):
 
 
 class TestCache(unittest.TestCase):
-    def test_file_cache(self):
+    def setUp(self):
+        tmp_dir = Path(".tmp")
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+
+    def test_cache_and_clear(self):
         s1 = from_items(1, 2, 3, 4, 5)
+        self.assertFalse(s1.cache("test", check_only=True))
+        self.assertFalse(s1.cache("test", check_only=True, length_only=True))
         s1.cache("test")
         self.assertTrue(s1.cache("test", check_only=True))
+        self.assertTrue(s1.cache("test", check_only=True, length_only=True))
         s1.cache("test", clear_cache="clear")
         self.assertFalse(s1.cache("test", check_only=True))
+        self.assertFalse(s1.cache("test", check_only=True, length_only=True))
+
+    def test_length_cache(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        s1.cache("test", length_only=True)
+        self.assertTrue(s1.cache("test", check_only=True))
+        self.assertTrue(s1.cache("test", check_only=True, length_only=True))
+
+        s1 = from_iterable([1, 2, 3, 4, 5])
+        self.assertFalse(s1.has_length)
+        self.assertFalse(s1.random_accessible)
+        s1.cache("test", length_only=True)
+        self.assertTrue(s1.has_length)
+        self.assertFalse(s1.random_accessible)
 
 
 class TestUtil(unittest.TestCase):

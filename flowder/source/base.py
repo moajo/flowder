@@ -463,7 +463,12 @@ class Source:
         dependencies = dependencies + ["filter"]
         return Source(ic_filter(self._raw, pred), parents=[self], dependencies=dependencies)
 
-    def cache(self, name, cache_dir=".tmp", clear_cache="no", check_only=False, caller_file_name=None):
+    def cache(self, name,
+              cache_dir=".tmp",
+              clear_cache="no",
+              check_only=False,
+              caller_file_name=None,
+              length_only=False):
         """
         即座にメモリにロードし、キャッシュファイルを作成する。
         キャッシュがすでにある場合はそれをロードする。
@@ -476,6 +481,10 @@ class Source:
         "all": キャッシュグループをすべて削除
         "clear": キャッシュグループをすべて削除し、ロードしない。
         :param caller_file_name:
+        :param length_only:
+        Trueで長さのみをキャッシュからロードする。
+        check_onlyが同時にTrueなら、length cacheの存在を確認する。
+        キャッシュがない場合はこのパラメータは無視される。
         :return:
         """
         assert clear_cache in ["no", "yes", "all", "clear"]
@@ -485,10 +494,15 @@ class Source:
             caller_file_name = p.name[:-len(p.suffix)]
 
         cache_base_name = f"flowder.{caller_file_name}.{name}.{hex(self.hash)[2:]}"
+        length_cache_base_name = f"flowder.{caller_file_name}.{name}.{hex(self.hash)[2:]}.len"
         cache_file_path = cache_dir / cache_base_name
+        length_cache_file_path = cache_dir / length_cache_base_name
 
         if check_only:
-            return cache_file_path.exists()
+            if length_only:
+                return length_cache_file_path.exists()
+            else:
+                return cache_file_path.exists()
 
         if clear_cache == "all":  # 同一のcache_group_nameのすべてのキャッシュも削除する
             for p in cache_dir.glob(f"flowder.{caller_file_name}.{name}*"):
@@ -496,13 +510,22 @@ class Source:
         elif clear_cache == "yes":  # キャッシュファイル名が完全一致するファイルを削除する
             if cache_file_path.exists():
                 cache_file_path.unlink()
+            if length_cache_file_path.exists():
+                length_cache_file_path.unlink()
         elif clear_cache == "clear":
             for p in cache_dir.glob(f"flowder.{caller_file_name}.{name}*"):
                 p.unlink()
             return
 
+        if length_only and length_cache_file_path.exists():
+            # loading length from cache
+            with length_cache_file_path.open("rb") as f:
+                self.length = pickle.load(f)
+                assert type(self.length) == int
+            return self
+
         if cache_file_path.exists():
-            print(f"[flowder.cache({name})]loading from cache file...\n\tcache file: {cache_file_path}")
+            print(f"[flowder.cache({name})]loading cache...\n\tcache file: {cache_file_path}")
             with cache_file_path.open("rb") as f:
                 data = pickle.load(f)
                 self.data = data
@@ -528,6 +551,8 @@ class Source:
                 cache_dir.mkdir(parents=True)
             with cache_file_path.open("wb") as f:
                 pickle.dump(self.data, f)
+            with length_cache_file_path.open("wb") as f:
+                pickle.dump(len(self.data), f)
             return self
 
     def mem_cache(self):
