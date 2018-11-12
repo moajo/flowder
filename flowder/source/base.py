@@ -6,7 +6,7 @@ import inspect
 
 from tqdm import tqdm
 
-from flowder.hash import default_hash_func
+from flowder.hash import default_hash_func, hash_max_size
 from flowder.source.depend_func import DependFunc
 from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, ic_from_array, ic_slice, ic_zip, \
     ic_concat, ic_flat_map, ic_from_iterable
@@ -379,10 +379,10 @@ class Source:
             hs = 1
             if self.parents is not None:
                 for p in self.parents:
-                    hs = (hs * 31 + p.hash) % sys.maxsize
+                    hs = (hs * 31 + p.hash) % hash_max_size
 
             if self.dependencies is not None:
-                hs = (hs * 31 + default_hash_func(self.dependencies)) % sys.maxsize
+                hs = (hs * 31 + default_hash_func(self.dependencies)) % hash_max_size
             self._hash = hs
         return self._hash
 
