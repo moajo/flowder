@@ -582,10 +582,6 @@ class Source:
         """
 
         if isinstance(item, slice):
-            if self.data is not None:
-                return Source(ic_from_array(self.data), ra_from_array(self.data),
-                              length=len(self.data),
-                              parents=[self])
             if self.has_length:
                 stop = item.stop if item.stop is not None else self.length
                 start = item.start if item.start is not None else 0
@@ -602,6 +598,12 @@ class Source:
                 stop = min(stop, self.length)
                 start = min(start, stop)
                 sl = slice(start, stop, step)
+                if self.data is not None:
+                    ic = ic_slice(ic_from_array(self.data), sl)
+                    ra = ra_slice(ra_from_array(self.data), s=sl)
+                    return Source(ic, ra,
+                                  length=(stop - start) // step,
+                                  parents=[self])
                 return Source(
                     ic_slice(self._raw, sl),
                     random_accessor=ra_slice(self._random_accessor, s=sl) if self.random_accessible else None,
