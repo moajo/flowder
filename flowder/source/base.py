@@ -580,9 +580,12 @@ class Source:
         :param item:
         :return:
         """
-        if self.data is not None:
-            return self.data[item]
+
         if isinstance(item, slice):
+            if self.data is not None:
+                return Source(ic_from_array(self.data), ra_from_array(self.data),
+                              length=len(self.data),
+                              parents=[self])
             if self.has_length:
                 stop = item.stop if item.stop is not None else self.length
                 start = item.start if item.start is not None else 0
@@ -612,6 +615,8 @@ class Source:
                     )
                 return Source(ic_slice(self._raw, item), parents=[self])
         else:
+            if self.data is not None:
+                return self.data[item]
             if not self.has_length:
                 if item < 0:
                     raise IndexError(

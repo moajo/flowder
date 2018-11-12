@@ -230,6 +230,12 @@ class TestSource(unittest.TestCase):
         self.assertNotEqual(s1.hash, s3.hash)
         self.assertNotEqual(s2.hash, s3.hash)
 
+    def test_hash4(self):
+        s1 = from_items(1, 2, 3, 4, 5)
+        self.assertNotEqual(s1.hash, s1[:].hash, "sliced source should have a different hash from the parent")
+        self.assertNotEqual(s1.hash, s1[1:].hash)
+        self.assertNotEqual(s1.hash, s1[:5].hash)
+
     def test_count(self):
         s1 = from_array([1, 2, 3, 4, 5])
         m = s1.flat_map(lambda a: [a])
