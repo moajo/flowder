@@ -353,6 +353,10 @@ class TestPipe(unittest.TestCase):
             "a": lambda a: a + 1,
             "b": lambda a: a * 2,
         }
+        r4 = r | mapped({
+            "a": lambda a: a + 1,
+            "b": lambda a: a * 2,
+        })
         self.assertEqual([
             {"a": 2, "b": 2},
             {"a": 3, "b": 2},
@@ -361,6 +365,7 @@ class TestPipe(unittest.TestCase):
             {"a": 6, "b": 2},
         ], list(r2))
         self.assertEqual(list(r2), list(r3))
+        self.assertEqual(list(r2), list(r4))
 
     def test_filter(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -470,6 +475,12 @@ class TestPipe(unittest.TestCase):
         p2 = mapped(lambda a: a + 1)
         m = p1 | p2
         self.assertEqual([{"a": i * 2 + 1, "b": i * 2} for i in range(10)], list(l | {"a": m}))
+
+        l = [1, 2, 3, 4, 5]
+        p1 = mapped(lambda a: {"a": a, "b": 2 * a})
+        p2 = {"a": lambda a: 3 * a}
+        m = p1 | p2
+        self.assertEqual([{"a": i * 3, "b": i * 2} for i in range(1, 6)], list(l | m))
 
 
 class TestCache(unittest.TestCase):

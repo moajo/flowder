@@ -43,6 +43,8 @@ class PipeFunc:
         return arg
 
     def __or__(self, other):
+        if isinstance(other, dict):
+            other = mapped(other)
         if isinstance(other, PipeFunc):
             return self._concat(other)
         else:
