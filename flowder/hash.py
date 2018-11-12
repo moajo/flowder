@@ -1,13 +1,16 @@
 import hashlib
-import sys
 from collections import Hashable
 
 hash_max_size = 2 ** 31 - 1
 
 
-def default_hash_func(obj, hash_func=None):
-    if hash_func is None:
-        hash_func = default_hash_func
+def default_hash_func(obj, extension: dict = None):
+    if extension is not None:
+        for ty in extension.keys():
+            if isinstance(obj, ty):
+                return default_hash_func(
+                    extension[ty](obj),
+                    extension=extension)
     if type(obj) == str:
         # note: default string hash will change to different value at the next session
         return int(hashlib.sha1(obj.encode('utf-8')).hexdigest(), 16) % hash_max_size
@@ -16,29 +19,24 @@ def default_hash_func(obj, hash_func=None):
     if isinstance(obj, list):
         hs = 1
         for a in obj:
-            hs = (hs * 31 + hash_func(a)) % hash_max_size
+            hs = (hs * 31 + default_hash_func(a, extension=extension)) % hash_max_size
         return hs
     if isinstance(obj, dict):
         hs = 1
         for k, v in obj.items():
-            hs = (hs * 31 + hash_func(k)) % hash_max_size
-            hs = (hs * 31 + hash_func(v)) % hash_max_size
+            hs = (hs * 31 + default_hash_func(k, extension=extension)) % hash_max_size
+            hs = (hs * 31 + default_hash_func(v, extension=extension)) % hash_max_size
         return hs
+    if extension is not None and "*" in extension:
+        return default_hash_func(extension["*"](obj), extension=extension)
     raise ValueError(
         f"{obj} is not hashable.\nall arguments must be hashable"
     )
 
 
-def extended_hash_func(extension: dict):
+def extended_hash_func(extension):
     def wrapper(obj):
-        if type(obj) in extension:
-            hashable = extension[type(obj)](obj)
-            return default_hash_func(hashable, hash_func=wrapper)
-        if "*" in extension:
-            hashable = extension["*"](obj)
-            return default_hash_func(hashable, hash_func=wrapper)
-
-        return default_hash_func(obj, hash_func=wrapper)
+        return default_hash_func(obj, extension)
 
     return wrapper
 
