@@ -235,6 +235,7 @@ class TestSource(unittest.TestCase):
         self.assertNotEqual(s1.hash, s1[:].hash, "sliced source should have a different hash from the parent")
         self.assertNotEqual(s1.hash, s1[1:].hash)
         self.assertNotEqual(s1.hash, s1[:5].hash)
+        self.assertNotEqual(s1[1:].hash, s1[:5].hash)
 
     def test_count(self):
         s1 = from_array([1, 2, 3, 4, 5])

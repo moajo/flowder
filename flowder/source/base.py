@@ -13,6 +13,21 @@ from flowder.source.iterable_creator import IterableCreator, ic_map, ic_filter, 
 from flowder.source.random_access import ra_concat, RandomAccessor, ra_zip, ra_map, ra_from_array, ra_slice
 
 
+def _assert_dependencies(d):
+    """
+    only str/int/bool+tuple/dict of they is acceptable
+    :param d:
+    :return:
+    """
+    if isinstance(d, tuple):
+        [_assert_dependencies(n) for n in d]
+        return
+    if isinstance(d, dict):
+        [type(k) == str and _assert_dependencies(v) for k, v in d.items()]
+        return
+    assert type(d) in [str, int, bool] or isinstance(d, DependFunc)
+
+
 class PipeFunc:
     """
     |で他のPipeFuncとconcatできる関数
@@ -332,7 +347,7 @@ class Source:
         if self.dependencies is not None:
             assert type(self.dependencies) == list
             for d in self.dependencies:
-                assert type(d) in [str, int, bool] or isinstance(d, DependFunc)
+                _assert_dependencies(d)
 
     @property
     def random_accessible(self):
@@ -601,14 +616,16 @@ class Source:
                 if self.data is not None:
                     ic = ic_slice(ic_from_array(self.data), sl)
                     ra = ra_slice(ra_from_array(self.data), s=sl)
-                    return Source(ic, ra,
-                                  length=(stop - start) // step,
-                                  parents=[self])
+                else:
+                    ic = ic_slice(self._raw, sl)
+                    ra = ra_slice(self._random_accessor, s=sl) if self.random_accessible else None
                 return Source(
-                    ic_slice(self._raw, sl),
-                    random_accessor=ra_slice(self._random_accessor, s=sl) if self.random_accessible else None,
+                    ic,
+                    random_accessor=ra,
                     length=(stop - start) // step,
-                    parents=[self])
+                    parents=[self],
+                    dependencies=[{"slice": (start, stop, step)}],
+                )
             else:
                 if item.start is not None and item.start < 0 or \
                         item.stop is not None and item.stop < 0:
