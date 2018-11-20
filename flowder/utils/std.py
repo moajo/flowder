@@ -160,8 +160,8 @@ def choice(source, indices):
         indices = from_array(indices)
     if isinstance(source, list):
         source = from_array(source)
-    assert isinstance(indices, Source)
-    assert isinstance(source, Source)
+    assert isinstance(indices, Source), "indices must be Source or list"
+    assert isinstance(source, Source), "source must be Source or list"
     assert source.random_accessible
 
     def mapp(i):

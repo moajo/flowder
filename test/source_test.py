@@ -10,6 +10,7 @@ from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
 from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten, choice
+from flowder.utils.random import random_choice, permutation
 from flowder.utils.window import windowed
 
 
@@ -634,6 +635,30 @@ class TestBatchProcessor(unittest.TestCase):
 
         p = c | s
         self.assertIsInstance(p, PipeFunc)
+
+
+class TestRandom(unittest.TestCase):
+    def test_random_choice(self):
+        s = from_array(list(range(1000)))
+        res1 = random_choice(s, 3)
+        res2 = random_choice(s, 3)
+        self.assertNotEqual(list(res1), list(res2))
+        self.assertTrue(0 < res1[0] < 1000)
+
+        res1 = random_choice(s, 3, seed=42)
+        res2 = random_choice(s, 3, seed=42)
+        self.assertEqual(list(res1), list(res2))
+
+    def test_random_permutation(self):
+        s = from_array(list(range(1000)))
+        res1 = permutation(s)
+        res2 = permutation(s)
+        self.assertNotEqual(list(res1), list(res2))
+        self.assertTrue(0 < res1[0] < 1000)
+
+        res1 = permutation(s, seed=42)
+        res2 = permutation(s, seed=42)
+        self.assertEqual(list(res1), list(res2))
 
 
 if __name__ == '__main__':
