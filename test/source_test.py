@@ -9,7 +9,7 @@ from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
-from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten
+from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten, choice
 from flowder.utils.window import windowed
 
 
@@ -197,6 +197,14 @@ class TestSource(unittest.TestCase):
             # {"v": 3, "double_v": 3*2},
             {"v": 4, "double_v": 4 * 2},
         ], list(map3))
+
+    def test_hash_on_from_array(self):
+        s1 = from_array([1, 2, 3, 4, 5], hash_func=None)
+        s2 = from_array([1, 2, 3, 4, 5, 6, 7], hash_func=None)
+        self.assertEqual(s1.hash, s2.hash)
+        s1 = from_array([1, 2, 3, 4, 5], hash_func=lambda a: len(a))
+        s2 = from_array([1, 2, 3, 4, 5, 6, 7], hash_func=lambda a: len(a))
+        self.assertNotEqual(s1.hash, s2.hash)
 
     def test_hash(self):
         s1 = from_items(1, 2, 3, 4, 5)
@@ -597,6 +605,26 @@ class TestUtil(unittest.TestCase):
         ], list(m))
         self.assertEqual(list(m), list(m))
         ic_ra_test(m, "m5")
+
+
+class TestStd(unittest.TestCase):
+    def test_choice(self):
+        s = from_array([2 * n for n in range(10)])
+        ind = from_array([9, 4, 0])
+        res = choice(s, ind)
+        self.assertEqual([18, 8, 0], list(res))
+        self.assertEqual([18, 8, 0], list(choice(from_array([2 * n for n in range(10)]), [9, 4, 0])))
+        self.assertEqual([18, 8, 0], list(choice([2 * n for n in range(10)], [9, 4, 0])))
+
+        self.assertTrue(res.has_length)
+        self.assertTrue(res.random_accessible)
+
+        s1 = from_array(list(range(10)), hash_func=lambda l: l[0])
+        s2 = from_array(list(range(1, 11)), hash_func=lambda l: l[0])
+        ind1 = from_array([1, 2, 3], hash_func=lambda l: l[0])
+        ind2 = from_array([2, 3, 4], hash_func=lambda l: l[0])
+        self.assertNotEqual(choice(s1, ind1).hash, choice(s1, ind2).hash)
+        self.assertNotEqual(choice(s1, ind1).hash, choice(s2, ind1).hash)
 
 
 class TestBatchProcessor(unittest.TestCase):

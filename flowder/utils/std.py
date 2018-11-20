@@ -8,7 +8,7 @@ import gzip
 from flowder.hash import default_hash_func
 from flowder.source.base import mapped, Source, ic_from_array, filtered, FlatMapped
 from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator, ic_map
-from flowder.source.random_access import ra_from_array
+from flowder.source.random_access import ra_from_array, ra_map
 
 
 def _cal_file_hash(path):
@@ -54,6 +54,8 @@ def from_array(array, *, hash_func=None):
     create Source from list or tuple
     :param array:
     :param hash_func:
+    arrayを引数にとって呼ばれ、整数値を
+    Noneならハッシュを計算しない(定数になる)
     :return:
     """
     assert type(array) in [tuple, list]
@@ -151,3 +153,22 @@ def glob(glob_path: str):
 
 
 flatten: FlatMapped = FlatMapped(lambda a: a, dependencies=[])
+
+
+def choice(source, indices):
+    if isinstance(indices, list):
+        indices = from_array(indices)
+    if isinstance(source, list):
+        source = from_array(source)
+    assert isinstance(indices, Source)
+    assert isinstance(source, Source)
+    assert source.random_accessible
+
+    def mapp(i):
+        return source[i]
+
+    return Source(
+        ic_map(indices.iterable_creator, mapp),
+        random_accessor=ra_map(indices.random_accessor, mapp),
+        parents=[source, indices],
+        length=len(indices) if indices.has_length else None)
