@@ -262,7 +262,7 @@ def zipped(*sources):
     for s in sources:
         assert isinstance(s, Source)
     if all(s.random_accessible for s in sources):
-        ra = ra_zip(*(s._random_accessor for s in sources))
+        ra = ra_zip(*(s.random_accessor for s in sources))
         length = min(len(s) for s in sources)
     else:
         ra = None
@@ -270,7 +270,7 @@ def zipped(*sources):
             length = min(len(s) for s in sources)
         else:
             length = None
-    return Source(ic_zip(*[s._raw for s in sources]), random_accessor=ra, parents=list(sources), length=length)
+    return Source(ic_zip(*[s.iterable_creator for s in sources]), random_accessor=ra, parents=list(sources), length=length)
 
 
 def _pattern_to_transform(transform_dict):
@@ -315,22 +315,22 @@ class Source:
     """
 
     def __init__(self,
-                 raw: IterableCreator,
+                 iterable_creator: IterableCreator,
                  random_accessor: RandomAccessor = None,
                  parents=None,
                  length: int = None,
                  dependencies=None):
         """
 
-        :param raw: iteratorを返す関数
+        :param iterable_creator: iteratorを返す関数
         :param parents: hashの計算やstrで使う
         :param length: 既知なら与える
         :param dependencies: 依存するパラメータ。ハッシュに使う
         """
         self.parents = parents
         self.length = length
-        self._raw = raw
-        self._random_accessor = random_accessor
+        self.iterable_creator = iterable_creator
+        self.random_accessor = random_accessor
         self.dependencies = dependencies if dependencies is not None else []
         self.data = None  # for random access
         self._hash = None  # lazy eval
@@ -353,7 +353,7 @@ class Source:
 
     @property
     def random_accessible(self):
-        return self._random_accessor is not None
+        return self.random_accessor is not None
 
     def __add__(self, other):  # concat Source
         assert isinstance(other, Source)
@@ -362,10 +362,10 @@ class Source:
         else:
             length = None
         if self.random_accessible and other.random_accessible:
-            ra = ra_concat(self._random_accessor, other._random_accessor, self.length)
+            ra = ra_concat(self.random_accessor, other.random_accessor, self.length)
         else:
             ra = None
-        return Source(ic_concat(self._raw, other._raw), random_accessor=ra, parents=[self, other], length=length)
+        return Source(ic_concat(self.iterable_creator, other.iterable_creator), random_accessor=ra, parents=[self, other], length=length)
 
     def __mul__(self, other):  # zip Source
         assert isinstance(other, Source)
@@ -374,13 +374,13 @@ class Source:
         else:
             length = None
         if self.random_accessible and other.random_accessible:
-            ra = ra_zip(self._random_accessor, other._random_accessor)
+            ra = ra_zip(self.random_accessor, other.random_accessor)
         else:
             ra = None
-        return Source(ic_zip(self._raw, other._raw), random_accessor=ra, parents=[self, other], length=length)
+        return Source(ic_zip(self.iterable_creator, other.iterable_creator), random_accessor=ra, parents=[self, other], length=length)
 
     def __iter__(self):
-        yield from self._raw(0)
+        yield from self.iterable_creator(0)
 
     @property
     def has_length(self) -> bool:
@@ -447,7 +447,7 @@ class Source:
             dependencies = []
         dependencies = dependencies + ["flatmap"]
         return Source(
-            ic_flat_map(self._raw, converter),
+            ic_flat_map(self.iterable_creator, converter),
             parents=[self],
             dependencies=dependencies)
 
@@ -466,8 +466,8 @@ class Source:
             dependencies = []
         dependencies = dependencies + ["map"]
         return Source(
-            ic_map(self._raw, transform),
-            random_accessor=ra_map(self._random_accessor, transform) if self.random_accessible else None,
+            ic_map(self.iterable_creator, transform),
+            random_accessor=ra_map(self.random_accessor, transform) if self.random_accessible else None,
             parents=[self],
             length=self.length,
             dependencies=dependencies)
@@ -478,7 +478,7 @@ class Source:
         if dependencies is None:
             dependencies = []
         dependencies = dependencies + ["filter"]
-        return Source(ic_filter(self._raw, pred), parents=[self], dependencies=dependencies)
+        return Source(ic_filter(self.iterable_creator, pred), parents=[self], dependencies=dependencies)
 
     def cache(self, name,
               cache_dir=".tmp",
@@ -547,21 +547,21 @@ class Source:
                 data = pickle.load(f)
                 self.data = data
                 self.length = len(data)
-                self._raw = ic_from_array(data)
-                self._random_accessor = ra_from_array(data)
+                self.iterable_creator = ic_from_array(data)
+                self.random_accessor = ra_from_array(data)
             return self
         else:
             if self.data is None:
                 desc = f"[flowder.cache({name})]loading data from source..."
                 if self.has_length:
-                    it = tqdm(self._raw(0), total=len(self), desc=desc)
+                    it = tqdm(self.iterable_creator(0), total=len(self), desc=desc)
                 else:
-                    it = tqdm(self._raw(0), desc=desc)
+                    it = tqdm(self.iterable_creator(0), desc=desc)
                 data = list(it)
                 self.data = data
                 self.length = len(data)
-                self._raw = ic_from_array(data)
-                self._random_accessor = ra_from_array(data)
+                self.iterable_creator = ic_from_array(data)
+                self.random_accessor = ra_from_array(data)
 
             print(f"[flowder.cache({name})]create cache file...\n\tcache file: {cache_file_path}")
             if not cache_dir.exists():
@@ -577,14 +577,14 @@ class Source:
             return
         desc = f"[flowder.cache(?)]loading data from source..."
         if self.has_length:
-            it = tqdm(self._raw(0), total=len(self), desc=desc)
+            it = tqdm(self.iterable_creator(0), total=len(self), desc=desc)
         else:
-            it = tqdm(self._raw(0), desc=desc)
+            it = tqdm(self.iterable_creator(0), desc=desc)
         data = list(it)
         self.data = data
         self.length = len(data)
-        self._raw = ic_from_array(data)
-        self._random_accessor = ra_from_array(data)
+        self.iterable_creator = ic_from_array(data)
+        self.random_accessor = ra_from_array(data)
 
     def count(self):
         if not self.has_length:
@@ -619,8 +619,8 @@ class Source:
                     ic = ic_slice(ic_from_array(self.data), sl)
                     ra = ra_slice(ra_from_array(self.data), s=sl)
                 else:
-                    ic = ic_slice(self._raw, sl)
-                    ra = ra_slice(self._random_accessor, s=sl) if self.random_accessible else None
+                    ic = ic_slice(self.iterable_creator, sl)
+                    ra = ra_slice(self.random_accessor, s=sl) if self.random_accessible else None
                 return Source(
                     ic,
                     random_accessor=ra,
@@ -634,7 +634,7 @@ class Source:
                     raise IndexError(
                         "negative index does not supported on the source that has no length"
                     )
-                return Source(ic_slice(self._raw, item), parents=[self])
+                return Source(ic_slice(self.iterable_creator, item), parents=[self])
         else:
             if self.data is not None:
                 return self.data[item]
@@ -650,7 +650,7 @@ class Source:
                     raise IndexError("index out of range")
             if not self.random_accessible:
                 raise IndexError("this source is not able to be random accessed")
-            return self._random_accessor(item)
+            return self.random_accessor(item)
 
     def search_item(self, index):
         """
@@ -669,8 +669,8 @@ class Source:
                 index += self.length
             assert 0 <= index < self.length, "index out of range"
         if self.random_accessible:
-            return self._random_accessor(index)
-        return next(iter(self._raw(index)))
+            return self.random_accessor(index)
+        return next(iter(self.iterable_creator(index)))
 
     def __rshift__(self, other):
         if isinstance(other, Aggregator):

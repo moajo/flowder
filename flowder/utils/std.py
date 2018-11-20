@@ -7,7 +7,7 @@ import gzip
 
 from flowder.hash import default_hash_func
 from flowder.source.base import mapped, Source, ic_from_array, filtered, FlatMapped
-from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator
+from flowder.source.iterable_creator import ic_from_iterable, ic_from_generator, ic_map
 from flowder.source.random_access import ra_from_array
 
 

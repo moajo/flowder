@@ -76,8 +76,8 @@ def _window(source: Source, window_size: int, drop_first: bool = True):
 
     dependencies = ["window"]
     return Source(
-        ic_window(source._raw),
-        random_accessor=ra_window(source._random_accessor, len(source)) if source.random_accessible else None,
+        ic_window(source.iterable_creator),
+        random_accessor=ra_window(source.random_accessor, len(source)) if source.random_accessible else None,
         parents=[source],
         length=max(0, source.length - window_size + 1) if drop_first else source.length,
         dependencies=dependencies)
