@@ -23,6 +23,15 @@ def _cal_file_hash(path):
     return hs.hexdigest()
 
 
+def concat(*sources):
+    assert all(isinstance(s, Source) for s in sources)
+    assert len(sources) >= 1
+    res = sources[0]
+    for s in sources[1:]:
+        res += s
+    return res
+
+
 def map_pipe(dependencies=None):
     """
     Map Pipeに変換するdecorator

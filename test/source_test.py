@@ -9,7 +9,7 @@ from flowder.pipes import split, select, to_dict
 from flowder.source import Source
 from flowder.source.base import mapped, zipped, filtered, flat_mapped
 from flowder.source.depend_func import depend
-from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten, choice
+from flowder.utils import from_array, from_items, from_iterable, lines, lines_gzip, flatten, choice, concat
 from flowder.utils.random import random_choice, permutation
 from flowder.utils.window import windowed
 
@@ -609,6 +609,13 @@ class TestUtil(unittest.TestCase):
 
 
 class TestStd(unittest.TestCase):
+    def test_concat(self):
+        s1 = from_array([1, 2, 3])
+        s2 = from_array([4, 5, 6])
+        s3 = from_array([7, 8, 9])
+        s = concat(s1, s2, s3)
+        self.assertEqual(list(range(1, 10)), list(s))
+
     def test_choice(self):
         s = from_array([2 * n for n in range(10)])
         ind = from_array([9, 4, 0])
