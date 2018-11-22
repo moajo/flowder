@@ -68,6 +68,7 @@ def tensor_pad_sequence(field_names, include_length=True, batch_first=False, pad
     def set(b, f, value):
         if type(f) != tuple:
             b[f] = value
+            return
         res = b
         for ff in f[:-1]:
             res = res[ff]
