@@ -165,16 +165,16 @@ class Mapped(PipeLine):
                     if type(data) in [tuple, list]:
                         assert type(key) == int
                         assert len(data) > key, f"invalid tuple mapping key(out of range): " \
-                                                f"\n\tkey: {key}" \
-                                                f"\n\tlen(data): {len(data)}"
+                            f"\n\tkey: {key}" \
+                            f"\n\tlen(data): {len(data)}"
                         return tuple(
                             transform(data[i]) if i == key else data[i]
                             for i in range(len(data))
                         )
                     elif type(data) == dict:
                         assert key in data, f"invalid dict mapping key(key not found): " \
-                                            f"\n\tkey: {key}" \
-                                            f"\n\tdata.keys(): {data.keys()}"
+                            f"\n\tkey: {key}" \
+                            f"\n\tdata.keys(): {data.keys()}"
                         return {
                             k: transform(data[k]) if k == key else data[k]
                             for k in data
@@ -209,12 +209,12 @@ class Filtered(PipeLine):
                 def _m(data):
                     if type(data) == dict:
                         assert key in data, f"invalid dict filtering key(key not found): " \
-                                            f"\n\tkey: {key}" \
-                                            f"\n\tdata.keys(): {data.keys()}"
+                            f"\n\tkey: {key}" \
+                            f"\n\tdata.keys(): {data.keys()}"
                     else:
                         assert len(data) > key, f"invalid tuple filtering key(out of range): " \
-                                                f"\n\tkey: {key}" \
-                                                f"\n\tlen(data): {len(data)}"
+                            f"\n\tkey: {key}" \
+                            f"\n\tlen(data): {len(data)}"
                     return pred(data[key])
 
                 return source.filter(_m, dependencies=d)
@@ -270,9 +270,11 @@ def zipped(*sources):
             length = min(len(s) for s in sources)
         else:
             length = None
-    return Source(ic_zip(*[s.iterable_creator for s in sources]), random_accessor=ra, parents=list(sources), length=length)
+    return Source(ic_zip(*[s.iterable_creator for s in sources]), random_accessor=ra, parents=list(sources),
+                  length=length)
 
 
+# TODO: 構造ネストに対応
 def _pattern_to_transform(transform_dict):
     def wrapper(data):
         if isinstance(data, tuple) or isinstance(data, list):
@@ -365,7 +367,8 @@ class Source:
             ra = ra_concat(self.random_accessor, other.random_accessor, self.length)
         else:
             ra = None
-        return Source(ic_concat(self.iterable_creator, other.iterable_creator), random_accessor=ra, parents=[self, other], length=length)
+        return Source(ic_concat(self.iterable_creator, other.iterable_creator), random_accessor=ra,
+                      parents=[self, other], length=length)
 
     def __mul__(self, other):  # zip Source
         assert isinstance(other, Source)
@@ -377,7 +380,8 @@ class Source:
             ra = ra_zip(self.random_accessor, other.random_accessor)
         else:
             ra = None
-        return Source(ic_zip(self.iterable_creator, other.iterable_creator), random_accessor=ra, parents=[self, other], length=length)
+        return Source(ic_zip(self.iterable_creator, other.iterable_creator), random_accessor=ra, parents=[self, other],
+                      length=length)
 
     def __iter__(self):
         yield from self.iterable_creator(0)

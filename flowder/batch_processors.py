@@ -43,27 +43,47 @@ def tensor_pad_sequence(field_names, include_length=True, batch_first=False, pad
     可変長シーケンス列をpaddingする。
     対象はtensorのlist。各tensorはshape[0]を長さとする。
     同時にもともとの長さを1次元tensorとして作成し、元のフィールドを長さとのtupleに置き換える
-    :param field_names: strまたはstrのtuple
+    :param field_names: (str,intまたはそれらのtuple)またはそのtuple
+    strのtupleの場合、複数回のキーアクセスを示す。
+    ex: ("en", 0)  ->  batch["en"][0]
     :param include_length: 長さ情報を残すか
     :param batch_first:
     :param padding_value:
     :return:
     """
-    if isinstance(field_names, tuple):
-        assert all(isinstance(a, str) for a in field_names)
-    if isinstance(field_names, str):
-        field_names = (field_names,)
-    assert isinstance(field_names, tuple)
+    if type(field_names) in [tuple, list]:
+        assert all(type(a) in [str, int, tuple] for a in field_names)
+    else:
+        field_names = [field_names]
+    assert type(field_names) in [tuple, list]
+
+    def get(b, f):
+        if type(f) != tuple:
+            return b[f]
+        res = b
+        for ff in f:
+            res = res[ff]
+        return res
+
+    def set(b, f, value):
+        if type(f) != tuple:
+            b[f] = value
+        res = b
+        for ff in f[:-1]:
+            res = res[ff]
+        res[f[-1]] = value
 
     @pipe
     def wrapper(batch):
         for field_name in field_names:
-            result = pad_sequence(batch[field_name], padding_value=padding_value, batch_first=batch_first)
+            v = get(batch, field_name)
+            result = pad_sequence(v, padding_value=padding_value, batch_first=batch_first)
             if include_length:
-                length = torch.LongTensor([len(a) for a in batch[field_name]]).contiguous()
-                batch[field_name] = result, length
+                length = torch.LongTensor([len(a) for a in v]).contiguous()
+                new_value = result, length
             else:
-                batch[field_name] = result
+                new_value = result
+            set(batch, field_name, new_value)
         return batch
 
     return wrapper
