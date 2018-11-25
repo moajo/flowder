@@ -166,7 +166,7 @@ flatten: FlatMapped = FlatMapped(lambda a: a, dependencies=[])
 
 def choice(source, indices):
     if isinstance(indices, list):
-        indices = from_array(indices)
+        indices = from_array(indices, hash_func=default_hash_func)
     if isinstance(source, list):
         source = from_array(source)
     assert isinstance(indices, Source), "indices must be Source or list"

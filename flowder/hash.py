@@ -5,6 +5,12 @@ hash_max_size = 2 ** 31 - 1
 
 
 def default_hash_func(obj, extension: dict = None):
+    """
+    acceptable type: str,int,list,dict
+    :param obj:
+    :param extension:
+    :return:
+    """
     if extension is not None:
         for ty in extension.keys():
             if isinstance(obj, ty):

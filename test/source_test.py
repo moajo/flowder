@@ -634,6 +634,11 @@ class TestStd(unittest.TestCase):
         self.assertNotEqual(choice(s1, ind1).hash, choice(s1, ind2).hash)
         self.assertNotEqual(choice(s1, ind1).hash, choice(s2, ind1).hash)
 
+        ind1 = [1, 2, 3]
+        ind2 = [2, 3, 4]
+        self.assertNotEqual(choice(s1, ind1).hash, choice(s1, ind2).hash)
+        self.assertNotEqual(choice(s1, ind1).hash, choice(s2, ind1).hash)
+
 
 class TestBatchProcessor(unittest.TestCase):
     def test_pipe(self):
