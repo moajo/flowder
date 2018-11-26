@@ -546,7 +546,7 @@ class Source:
             return self
 
         if cache_file_path.exists():
-            print(f"[flowder.cache({name})]loading cache...\n\tcache file: {cache_file_path}")
+            print(f"[flowder.cache({name})]loading cache...<< {cache_file_path}")
             with cache_file_path.open("rb") as f:
                 data = pickle.load(f)
                 self.data = data
@@ -556,7 +556,7 @@ class Source:
             return self
         else:
             if self.data is None:
-                desc = f"[flowder.cache({name})]loading data from source..."
+                desc = f"[flowder.cache({name})]iterating source..."
                 if self.has_length:
                     it = tqdm(self.iterable_creator(0), total=len(self), desc=desc)
                 else:
@@ -567,7 +567,7 @@ class Source:
                 self.iterable_creator = ic_from_array(data)
                 self.random_accessor = ra_from_array(data)
 
-            print(f"[flowder.cache({name})]create cache file...\n\tcache file: {cache_file_path}")
+            print(f"[flowder.cache({name})]create cache file...>> {cache_file_path}")
             if not cache_dir.exists():
                 cache_dir.mkdir(parents=True)
             with cache_file_path.open("wb") as f:
@@ -579,7 +579,7 @@ class Source:
     def mem_cache(self):
         if self.data is not None:
             return
-        desc = f"[flowder.cache(?)]loading data from source..."
+        desc = f"[flowder.mem_cache(?)]iterating source..."
         if self.has_length:
             it = tqdm(self.iterable_creator(0), total=len(self), desc=desc)
         else:
