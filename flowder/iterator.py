@@ -133,6 +133,9 @@ class _IteratorBase:
         # prefetch iterator(start background loading process)
         self._pre_fetched_next_iter = self._iter() if prefetch_next_iterator else None
 
+    def dispose_prefetch_iterator(self):
+        self._pre_fetched_next_iter = None
+
     def _iter(self):
         raise NotImplementedError()
 
