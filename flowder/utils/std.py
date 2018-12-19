@@ -120,17 +120,20 @@ def lines(path):
     return Source(obs, ra, length=length, dependencies=[d])
 
 
-def lines_gzip(path):
+def lines_gzip(path, calc_length=True, encoding="utf-8"):
     path = pathlib.Path(path)
     assert path.exists(), "file not found"
 
     d = _cal_file_hash(path)
 
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        length = sum(1 for _ in f)
+    if calc_length:
+        with gzip.open(path, "rt", encoding=encoding) as f:
+            length = sum(1 for _ in f)
+    else:
+        length = None
 
     def _gen():
-        with gzip.open(path, "rt", encoding="utf-8") as ff:
+        with gzip.open(path, "rt", encoding=encoding) as ff:
             for line in ff:
                 yield line[:-1]
 
